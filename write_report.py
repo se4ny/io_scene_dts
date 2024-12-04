@@ -1,21 +1,30 @@
 from .DtsTypes import *
 
+
 def write_debug_report(filepath, shape):
     with open(filepath, "w") as fd:
+
         def p(line):
             fd.write(line + "\n")
+
         def gn(i):
             return shape.names[i]
+
         def ln(table, first, count):
+
             def each(i):
                 entry = table[i]
                 if hasattr(entry, "name"):
                     return str(i) + " -> " + gn(entry.name)
                 else:
                     return str(i)
+
             return ", ".join(map(each, range(first, first + count)))
+
         def show_matters(matters):
-            return ' '.join(map(lambda p: gn(p[0].name), filter(lambda p: p[1], zip(shape.nodes, matters))))
+            return ' '.join(
+                map(lambda p: gn(p[0].name),
+                    filter(lambda p: p[1], zip(shape.nodes, matters))))
 
         p("smallest_size = " + str(shape.smallest_size))
         p("smallest_detail_level = " + str(shape.smallest_detail_level))
@@ -30,13 +39,17 @@ def write_debug_report(filepath, shape):
 
         p("Sequence node rotations: " + str(len(shape.node_rotations)))
         p("Sequence node translations: " + str(len(shape.node_translations)))
-        p("Sequence node uniform scales: " + str(len(shape.node_uniform_scales)))
-        p("Sequence node aligned scales: " + str(len(shape.node_aligned_scales)))
-        p("Sequence node arbitrary scales: " + str(len(shape.node_arbitrary_scale_factors)))
+        p("Sequence node uniform scales: " +
+          str(len(shape.node_uniform_scales)))
+        p("Sequence node aligned scales: " +
+          str(len(shape.node_aligned_scales)))
+        p("Sequence node arbitrary scales: " +
+          str(len(shape.node_arbitrary_scale_factors)))
 
         p("Detail levels (" + str(len(shape.detail_levels)) + "):")
         for i, lod in enumerate(shape.detail_levels):
-            p("  LOD " + str(i) + " " + gn(lod.name) + " (size " + str(lod.size) + ")")
+            p("  LOD " + str(i) + " " + gn(lod.name) + " (size " +
+              str(lod.size) + ")")
             p("    subshape = " + str(lod.subshape))
             p("    objectDetail = " + str(lod.objectDetail))
             p("    polyCount = " + str(lod.polyCount))
@@ -55,7 +68,8 @@ def write_debug_report(filepath, shape):
             # p("      nodes = " + ln(shape.nodes, sub.firstNode, sub.numNodes))
             # p("      objects = " + ln(shape.objects, sub.firstObject, sub.numObjects))
             p("    nodes = " + ln(shape.nodes, sub.firstNode, sub.numNodes))
-            p("    objects = " + ln(shape.objects, sub.firstObject, sub.numObjects))
+            p("    objects = " +
+              ln(shape.objects, sub.firstObject, sub.numObjects))
             # p("      decals (deprecated) = " + ln(shape.decals, sub.firstDecal, sub.numDecals))
 
         p("Nodes (" + str(len(shape.nodes)) + "):")
@@ -63,7 +77,8 @@ def write_debug_report(filepath, shape):
             if node.parent == -1:
                 p("  " + str(i) + " " + gn(node.name))
             else:
-                p("  " + str(i) + " " + gn(node.name) + "  ->  " + str(node.parent) + " " + gn(shape.nodes[node.parent].name))
+                p("  " + str(i) + " " + gn(node.name) + "  ->  " +
+                  str(node.parent) + " " + gn(shape.nodes[node.parent].name))
             if i < len(shape.default_translations):
                 p("    translation = " + str(shape.default_translations[i]))
             else:
@@ -82,20 +97,28 @@ def write_debug_report(filepath, shape):
             if obj.node == -1:
                 s += " NOT ATTACHED!"
             else:
-                s += " in " + str(obj.node) + " (" + gn(shape.nodes[obj.node].name) + ")"
+                s += " in " + str(obj.node) + " (" + gn(
+                    shape.nodes[obj.node].name) + ")"
             s += ", meshes = " + ln(shape.meshes, obj.firstMesh, obj.numMeshes)
             p(s)
 
         p("Materials (" + str(len(shape.materials)) + "):")
         for i, mat in enumerate(shape.materials):
-            flagNames = ("SWrap", "TWrap", "Translucent", "Additive", "Subtractive", "SelfIlluminating", "NeverEnvMap", "NoMipMap", "MipMapZeroBorder", "IFLMaterial", "IFLFrame", "DetailMap", "BumpMap", "ReflectanceMap", "AuxiliaryMask")
+            flagNames = ("SWrap", "TWrap", "Translucent", "Additive",
+                         "Subtractive", "SelfIlluminating", "NeverEnvMap",
+                         "NoMipMap", "MipMapZeroBorder", "IFLMaterial",
+                         "IFLFrame", "DetailMap", "BumpMap", "ReflectanceMap",
+                         "AuxiliaryMask")
             flags = ""
             for name in flagNames:
                 if mat.flags & getattr(Material, name):
                     flags += " " + name
-            p("  " + str(i) + " " + mat.name + " (" + str(mat.flags) + flags + ")")
-            p("    bumpMap = " + str(mat.bumpMap) + ", reflectanceMap = " + str(mat.reflectanceMap) + ", detailMap = " + str(mat.detailMap))
-            p("    reflectance = " + str(mat.reflectance) + ", detailScale = " + str(mat.detailScale))
+            p("  " + str(i) + " " + mat.name + " (" + str(mat.flags) + flags +
+              ")")
+            p("    bumpMap = " + str(mat.bumpMap) + ", reflectanceMap = " +
+              str(mat.reflectanceMap) + ", detailMap = " + str(mat.detailMap))
+            p("    reflectance = " + str(mat.reflectance) +
+              ", detailScale = " + str(mat.detailScale))
 
         p("IFL materials (" + str(len(shape.iflmaterials)) + "):")
         for ifl in shape.iflmaterials:
@@ -104,8 +127,10 @@ def write_debug_report(filepath, shape):
                 mat_name = gn(shape.materials[ifl.slot].name)
             else:
                 mat_name = "<MISSING>"
-            p("    slot = " + str(ifl.slot) + " " + mat_name + ", time = " + str(ifl.time))
-            p("    firstFrame = " + str(ifl.firstFrame) + ", numFrames = " + str(ifl.numFrames))
+            p("    slot = " + str(ifl.slot) + " " + mat_name + ", time = " +
+              str(ifl.time))
+            p("    firstFrame = " + str(ifl.firstFrame) + ", numFrames = " +
+              str(ifl.numFrames))
 
         p("Meshes (" + str(len(shape.meshes)) + "):")
         for i, mesh in enumerate(shape.meshes):
@@ -142,19 +167,25 @@ def write_debug_report(filepath, shape):
                     flags += " NoMaterial"
                 mat = prim.type & Primitive.MaterialMask
                 flags += " MaterialMask:" + str(mat)
-                p("      " + str(prim.firstElement) + "->" + str(prim.firstElement + prim.numElements - 1) + " " + str(prim.type) + flags)
+                p("      " + str(prim.firstElement) + "->" +
+                  str(prim.firstElement + prim.numElements - 1) + " " +
+                  str(prim.type) + flags)
             p("    + Vertices (" + str(len(mesh.verts)) + "): <omitted>")
             # for i in range(len(mesh.verts)):
             #     p("      vert" + str(i) + " " + str(mesh.verts[i]) + " normal " + str(mesh.normals[i]) + " encoded " + str(mesh.enormals[i]))
-            p("    + Texture coords (" + str(len(mesh.tverts)) + "): <omitted>")
+            p("    + Texture coords (" + str(len(mesh.tverts)) +
+              "): <omitted>")
             # for i in range(len(mesh.tverts)):
             #     p("      tvert" + str(i) + " " + str(mesh.tverts[i]))
 
             if mtype == Mesh.SkinType:
                 p("    + Bones ({})".format(len(mesh.bones)))
-                for i, (node_index, initial_transform) in enumerate(mesh.bones):
-                    p("      bone{} node={} initial_transform={}".format(i, node_index, initial_transform))
-                p("    + Influences ({}): <omitted>".format(len(mesh.influences)))
+                for i, (node_index,
+                        initial_transform) in enumerate(mesh.bones):
+                    p("      bone{} node={} initial_transform={}".format(
+                        i, node_index, initial_transform))
+                p("    + Influences ({}): <omitted>".format(
+                    len(mesh.influences)))
                 # for vi, bi, w in mesh.influences:
                 #     p
                 #     p("      influence vert{} bone{} weight={}".format(vi, bi, w))
@@ -177,7 +208,8 @@ def write_debug_report(filepath, shape):
             p("    numTriggers: " + str(seq.numTriggers))
             p("    toolBegin: " + str(seq.toolBegin))
             p("    rotationMatters: " + show_matters(seq.rotationMatters))
-            p("    translationMatters: " + show_matters(seq.translationMatters))
+            p("    translationMatters: " +
+              show_matters(seq.translationMatters))
             p("    scaleMatters: " + show_matters(seq.scaleMatters))
             p("    decalMatters: " + show_matters(seq.decalMatters))
             p("    iflMatters: " + show_matters(seq.iflMatters))

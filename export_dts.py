@@ -15,8 +15,10 @@ import re
 re_lod_size = re.compile(r"(-?\d+)$")
 common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
 
+
 def undup_name(n):
     return n.split("#", 1)[0]
+
 
 def linearrgb_to_srgb(c):
     if c < 0.0031308:
@@ -25,7 +27,8 @@ def linearrgb_to_srgb(c):
         else:
             return c * 12.92
     else:
-        return 1.055 * (c ** (1.0 / 2.4)) - 0.055
+        return 1.055 * (c**(1.0 / 2.4)) - 0.055
+
 
 def get_vertex_bone(mesh, node):
     for bone_index, (node_index, _) in enumerate(mesh.bones):
@@ -40,6 +43,7 @@ def get_vertex_bone(mesh, node):
 
     mesh.bones.append((node.index, flat_mat))
     return bone_index
+
 
 def add_vertex_influences(ob, armature, node_lookup, mesh, vert, vertex_index):
     influences = []
@@ -65,10 +69,10 @@ def add_vertex_influences(ob, armature, node_lookup, mesh, vert, vertex_index):
         weight_multiplier = 1 / total_weight
 
     for node, weight in influences:
-        mesh.influences.append((
-            vertex_index,
-            get_vertex_bone(mesh, node),
-            weight * weight_multiplier))
+        mesh.influences.append(
+            (vertex_index, get_vertex_bone(mesh,
+                                           node), weight * weight_multiplier))
+
 
 def export_material(mat, shape):
     # print("Exporting material", mat.name)
@@ -102,9 +106,8 @@ def export_material(mat, shape):
         # what would duplicates do?
 
         ifl_index = len(shape.iflmaterials)
-        ifl = IflMaterial(
-            name=shape.name(mat.torque_props.ifl_name),
-            slot=material_index)
+        ifl = IflMaterial(name=shape.name(mat.torque_props.ifl_name),
+                          slot=material_index)
         shape.iflmaterials.append(ifl)
 
     material = Material(name=undup_name(mat.name), flags=flags)
@@ -114,8 +117,10 @@ def export_material(mat, shape):
 
     return material_index
 
+
 def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
+
 
 def export_empty_node(lookup, shape, select_object, ob, parent=-1):
     if select_object and not ob.select:
@@ -140,6 +145,7 @@ def export_empty_node(lookup, shape, select_object, ob, parent=-1):
         if child.type == 'EMPTY':
             export_empty_node(lookup, shape, select_object, child, node)
 
+
 def export_bones(lookup, shape, armature, bones, parent=-1):
     for bone in bones:
         node = Node(shape.name(bone.name), parent)
@@ -158,6 +164,7 @@ def export_bones(lookup, shape, armature, bones, parent=-1):
         shape.nodes.append(node)
         lookup[bone] = node
         export_bones(lookup, shape, armature, bone.children, node)
+
 
 def save_nodes(scene, shape, select_object, dsq_compat):
     node_lookup = {}
@@ -183,24 +190,29 @@ def save_nodes(scene, shape, select_object, dsq_compat):
 
     # Sort by node indices from the DTS
     if dsq_compat:
-        shape.nodes.sort(key=lambda n:
-            order_key.get(shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
+        shape.nodes.sort(key=lambda n: order_key.get(
+            shape.names[n.name], n.bl_ob.get("nodeIndex", sys.maxsize)))
 
     for index, node in enumerate(shape.nodes):
         if not isinstance(node.parent, int):
             if not hasattr(node.parent, "index") and dsq_compat:
-                node_lookup = {"fail": "DSQ compatibility export failed due to new node structure."}
+                node_lookup = {
+                    "fail":
+                    "DSQ compatibility export failed due to new node structure."
+                }
                 break
             node.parent = node.parent.index
 
         location, rotation, scale = node.matrix.decompose()
 
         if not seq_float_eq((1, 1, 1), scale):
-            print("Warning: '{}' uses scale, which cannot be exported to DTS nodes"
-                  .format(shape.names[node.name]))
+            print(
+                "Warning: '{}' uses scale, which cannot be exported to DTS nodes"
+                .format(shape.names[node.name]))
 
         node.index = index
-        node.matrix_world = Matrix.Translation(location) * rotation.to_matrix().to_4x4()
+        node.matrix_world = Matrix.Translation(
+            location) * rotation.to_matrix().to_4x4()
 
         if node.parent != -1:
             parent = shape.nodes[node.parent]
@@ -210,6 +222,7 @@ def save_nodes(scene, shape, select_object, dsq_compat):
         shape.default_rotations.append(rotation)
 
     return node_lookup
+
 
 def save_meshes(scene, shape, node_lookup, select_object):
     scene_lods = {}
@@ -227,7 +240,9 @@ def save_meshes(scene, shape, node_lookup, select_object):
 
         if bobj.name.lower() == "bounds":
             if bounds_ob:
-                print("Warning: Multiple 'bounds' objects found - check capitalization")
+                print(
+                    "Warning: Multiple 'bounds' objects found - check capitalization"
+                )
             bounds_ob = bobj
             continue
 
@@ -238,7 +253,8 @@ def save_meshes(scene, shape, node_lookup, select_object):
 
         if bobj.users_group:
             if len(bobj.users_group) > 1:
-                print("Warning: Mesh {} is in multiple groups".format(bobj.name))
+                print("Warning: Mesh {} is in multiple groups".format(
+                    bobj.name))
 
             lod_name = bobj.users_group[0].name
         elif common_col_name.match(name):
@@ -271,8 +287,8 @@ def save_meshes(scene, shape, node_lookup, select_object):
                 bone = armature.data.bones[bobj.parent_bone]
 
                 if bone not in node_lookup:
-                    print('Ignoring mesh {} - parent bone {} not included'
-                          .format(bobj.name, bone.name))
+                    print('Ignoring mesh {} - parent bone {} not included'.
+                          format(bobj.name, bone.name))
                     continue
 
                 node = node_lookup[bone]
@@ -280,19 +296,23 @@ def save_meshes(scene, shape, node_lookup, select_object):
 
                 # Compensate for matrix_local pointing to tail, offset to head
                 # Does this need to use node.matrix somehow?
-                transform_mat = Matrix.Translation((0, bone.length, 0)) * transform_mat
+                transform_mat = Matrix.Translation(
+                    (0, bone.length, 0)) * transform_mat
             elif bobj.parent_type == 'OBJECT':
                 if bobj.parent not in node_lookup:
-                    print("The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes.".format(bobj.name, bobj.parent.type, bobj.parent.name))
+                    print(
+                        "The mesh '{}' has a parent of type '{}' (named '{}'). You can only parent meshes to empties, not other meshes."
+                        .format(bobj.name, bobj.parent.type, bobj.parent.name))
                     continue
 
-                if node_lookup[bobj.parent] is False: # not selected
+                if node_lookup[bobj.parent] is False:  # not selected
                     continue
 
                 attach_node = node_lookup[bobj.parent].index
             else:
-                print('Warning: Mesh "{}" is using an unsupported parenting type "{}"'
-                      .format(bobj.name, bobj.parent_type))
+                print(
+                    'Warning: Mesh "{}" is using an unsupported parenting type "{}"'
+                    .format(bobj.name, bobj.parent_type))
                 attach_node = None
         else:
             print("Warning: Mesh '{}' has no parent".format(bobj.name))
@@ -323,18 +343,27 @@ def save_meshes(scene, shape, node_lookup, select_object):
             if match:
                 lod_size = int(match.group(1))
             else:
-                print("Warning: LOD '{}' does not end with a size, assuming size 32".format(lod_name))
-                lod_size = 32 # setting?
+                print(
+                    "Warning: LOD '{}' does not end with a size, assuming size 32"
+                    .format(lod_name))
+                lod_size = 32  # setting?
 
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
-            scene_lods[lod_name] = DetailLevel(name=lod_name_index, subshape=0, objectDetail=-1, size=lod_size)
+            scene_lods[lod_name] = DetailLevel(name=lod_name_index,
+                                               subshape=0,
+                                               objectDetail=-1,
+                                               size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
 
         if name not in scene_objects:
-            object = Object(shape.name(name), numMeshes=0, firstMesh=0, node=attach_node)
+            object = Object(shape.name(name),
+                            numMeshes=0,
+                            firstMesh=0,
+                            node=attach_node)
             object.has_transparency = False
             shape.objects.append(object)
-            shape.objectstates.append(ObjectState(1.0, 0, 0)) # ff56g: search for a37hm
+            shape.objectstates.append(ObjectState(
+                1.0, 0, 0))  # ff56g: search for a37hm
             scene_objects[name] = (object, {})
 
         for slot in bobj.material_slots:
@@ -342,11 +371,14 @@ def save_meshes(scene, shape, node_lookup, select_object):
                 scene_objects[name][0].has_transparency = True
 
         if lod_name in scene_objects[name][1]:
-            print("Warning: Multiple objects {} in LOD {}, ignoring...".format(name, lod_name))
+            print("Warning: Multiple objects {} in LOD {}, ignoring...".format(
+                name, lod_name))
         else:
-            scene_objects[name][1][lod_name] = (bobj, transform_mat, armature_modifier)
+            scene_objects[name][1][lod_name] = (bobj, transform_mat,
+                                                armature_modifier)
 
     return scene_lods, scene_objects, bounds_ob
+
 
 def compute_bounds(shape, bounds_ob):
     print("Computing bounds")
@@ -359,9 +391,8 @@ def compute_bounds(shape, bounds_ob):
     #         shape.smallest_size = lod.size
     #         shape.smallest_detail_level = i
 
-    shape.bounds = Box(
-        Vector(( 10e30,  10e30,  10e30)),
-        Vector((-10e30, -10e30, -10e30)))
+    shape.bounds = Box(Vector((10e30, 10e30, 10e30)),
+                       Vector((-10e30, -10e30, -10e30)))
 
     shape.center = Vector()
 
@@ -378,8 +409,11 @@ def compute_bounds(shape, bounds_ob):
             mat = shape.nodes[obj.node].matrix_world
             bounds = mesh.calculate_bounds_mat(mat)
 
-            shape.radius = max(shape.radius, mesh.calculate_radius_mat(mat, shape.center))
-            shape.radius_tube = max(shape.radius_tube, mesh.calculate_radius_tube_mat(mat, shape.center))
+            shape.radius = max(shape.radius,
+                               mesh.calculate_radius_mat(mat, shape.center))
+            shape.radius_tube = max(
+                shape.radius_tube,
+                mesh.calculate_radius_tube_mat(mat, shape.center))
 
             shape.bounds.min.x = min(shape.bounds.min.x, bounds.min.x)
             shape.bounds.min.y = min(shape.bounds.min.y, bounds.min.y)
@@ -390,20 +424,23 @@ def compute_bounds(shape, bounds_ob):
 
     # Is there a bounds mesh? Use that instead.
     if bounds_ob:
-      shape.bounds = Box(Vector(bounds_ob.bound_box[0]), Vector(bounds_ob.bound_box[6]))
+        shape.bounds = Box(Vector(bounds_ob.bound_box[0]),
+                           Vector(bounds_ob.bound_box[6]))
 
-    shape.center = Vector((
-        (shape.bounds.min.x + shape.bounds.max.x) / 2,
-        (shape.bounds.min.y + shape.bounds.max.y) / 2,
-        (shape.bounds.min.z + shape.bounds.max.z) / 2))
+    shape.center = Vector(((shape.bounds.min.x + shape.bounds.max.x) / 2,
+                           (shape.bounds.min.y + shape.bounds.max.y) / 2,
+                           (shape.bounds.min.z + shape.bounds.max.z) / 2))
 
-def save(operator, context, filepath,
+
+def save(operator,
+         context,
+         filepath,
          select_object=False,
          select_marker=False,
          blank_material=True,
          generate_texture="disabled",
-         raw_colors = False,
-         dsq_compat = False,
+         raw_colors=False,
+         dsq_compat=False,
          apply_modifiers=True,
          debug_report=False):
     print("Exporting scene to DTS")
@@ -423,24 +460,29 @@ def save(operator, context, filepath,
     node_lookup = save_nodes(scene, shape, select_object, dsq_compat)
     if "fail" in node_lookup:
         return fail(operator, node_lookup["fail"])
-    scene_lods, scene_objects, bounds_ob = save_meshes(
-        scene, shape, node_lookup, select_object)
+    scene_lods, scene_objects, bounds_ob = save_meshes(scene, shape,
+                                                       node_lookup,
+                                                       select_object)
 
     # If the shape is empty, add a detail level so it is valid
     if not shape.detail_levels:
-        dl = DetailLevel(name=shape.name('detail1'), subshape=0, objectDetail=-1, size=1)
+        dl = DetailLevel(name=shape.name('detail1'),
+                         subshape=0,
+                         objectDetail=-1,
+                         size=1)
         shape.detail_levels.append(dl)
 
     # Put objects with transparent materials last
     # Note: If this plugin ever needs to do anything with objectstates,
     #       that needs to be handled properly. a37hm: earch for ff56g
-    shape.objects.sort(key=lambda object: object.has_transparency) # TODO: attrgetter
+    shape.objects.sort(
+        key=lambda object: object.has_transparency)  # TODO: attrgetter
 
     # Sort detail levels
     shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
 
     for i, lod in enumerate(shape.detail_levels):
-        lod.objectDetail = i # this isn't the right place for this
+        lod.objectDetail = i  # this isn't the right place for this
 
     print("Adding meshes to objects...")
 
@@ -462,7 +504,8 @@ def save(operator, context, filepath,
             lod_name = shape.names[lod.name]
 
             if lod_name in lods:
-                print("Exporting mesh '{}' (LOD '{}')".format(shape.names[object.name], lod_name))
+                print("Exporting mesh '{}' (LOD '{}')".format(
+                    shape.names[object.name], lod_name))
                 bobj, transform_mat, armature_modifier = lods[lod_name]
 
                 if armature_modifier is None:
@@ -509,12 +552,15 @@ def save(operator, context, filepath,
                 #    (dmesh.bounds.min.y + dmesh.bounds.max.y) / 2,
                 #    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2))
                 dmesh.center = Vector()
-                dmesh.radius = dmesh.calculate_radius_mat(Matrix(), dmesh.center)
+                dmesh.radius = dmesh.calculate_radius_mat(
+                    Matrix(), dmesh.center)
 
                 # Group all materials by their material_index
                 key = attrgetter("material_index")
-                grouped_polys = groupby(sorted(mesh.polygons, key=key), key=key)
-                grouped_polys = tuple(map(lambda t: (t[0], tuple(t[1])), grouped_polys))
+                grouped_polys = groupby(sorted(mesh.polygons, key=key),
+                                        key=key)
+                grouped_polys = tuple(
+                    map(lambda t: (t[0], tuple(t[1])), grouped_polys))
 
                 # Create a primitive from each group
                 for material_index, polys in grouped_polys:
@@ -530,8 +576,10 @@ def save(operator, context, filepath,
                     elif blank_material:
                         if blank_material_index is None:
                             blank_material_index = len(shape.materials)
-                            shape.materials.append(Material(name="blank",
-                                flags=Material.SWrap | Material.TWrap | Material.NeverEnvMap))
+                            shape.materials.append(
+                                Material(name="blank",
+                                         flags=Material.SWrap | Material.TWrap
+                                         | Material.NeverEnvMap))
 
                         flags |= blank_material_index & Primitive.MaterialMask
                     else:
@@ -547,7 +595,9 @@ def save(operator, context, filepath,
 
                         use_face_normal = not poly.use_smooth
 
-                        for vert_index, loop_index in zip(reversed(poly.vertices), reversed(poly.loop_indices)):
+                        for vert_index, loop_index in zip(
+                                reversed(poly.vertices),
+                                reversed(poly.loop_indices)):
                             vertex_index = len(dmesh.verts)
                             dmesh.indices.append(len(dmesh.indices))
 
@@ -559,7 +609,8 @@ def save(operator, context, filepath,
                                 normal = vert.normal
 
                             dmesh.verts.append(transform_mat * vert.co)
-                            dmesh.normals.append((transform_mat.to_3x3() * normal).normalized())
+                            dmesh.normals.append(
+                                (transform_mat.to_3x3() * normal).normalized())
 
                             dmesh.enormals.append(0)
 
@@ -571,27 +622,33 @@ def save(operator, context, filepath,
 
                             if mesh_type == Mesh.SkinType:
                                 add_vertex_influences(bobj, armature,
-                                                      node_lookup, dmesh,
-                                                      vert, vertex_index)
+                                                      node_lookup, dmesh, vert,
+                                                      vertex_index)
 
                     numElements = len(dmesh.verts) - firstElement
-                    dmesh.primitives.append(Primitive(firstElement, numElements, flags))
+                    dmesh.primitives.append(
+                        Primitive(firstElement, numElements, flags))
 
-                bpy.data.meshes.remove(mesh) # RIP!
+                bpy.data.meshes.remove(mesh)  # RIP!
 
                 # ??? ? ?? ???? ??? ?
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
                 if len(dmesh.indices) >= 65536:
-                    return fail(operator, "The mesh '{}' has too many vertex indices ({} >= 65536)".format(bobj.name, len(dmesh.indices)))
+                    return fail(
+                        operator,
+                        "The mesh '{}' has too many vertex indices ({} >= 65536)"
+                        .format(bobj.name, len(dmesh.indices)))
 
                 ### Nobody leaves Hotel California
             else:
                 # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
                 shape.meshes.append(Mesh(Mesh.NullType))
 
-    print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " + str(len(shape.objects)) + " objects")
-    shape.subshapes.append(Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
+    print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " +
+          str(len(shape.objects)) + " objects")
+    shape.subshapes.append(
+        Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
 
     # Figure out all the things
     compute_bounds(shape, bounds_ob)
@@ -602,10 +659,12 @@ def save(operator, context, filepath,
         print("Exporting sequence", name)
 
         if "start" not in markers:
-            return fail(operator, "Missing start marker for sequence '{}'".format(name))
+            return fail(operator,
+                        "Missing start marker for sequence '{}'".format(name))
 
         if "end" not in markers:
-            return fail(operator, "Missing end marker for sequence '{}'".format(name))
+            return fail(operator,
+                        "Missing end marker for sequence '{}'".format(name))
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
@@ -617,7 +676,8 @@ def save(operator, context, filepath,
         seq.priority = 1
 
         seq.toolBegin = frame_start
-        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
+        seq.duration = frame_range * (context.scene.render.fps_base /
+                                      context.scene.render.fps)
 
         if name in sequence_flags:
             for part in sequence_flags[name]:
@@ -633,7 +693,8 @@ def save(operator, context, filepath,
                 elif flag == "duration":
                     seq.duration = float(data)
                 else:
-                    print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
+                    print("Warning: Unknown flag '{}' (used by sequence '{}')".
+                          format(flag, name))
 
         seq.numKeyframes = frame_range
         seq.firstGroundFrame = len(shape.ground_translations)
@@ -693,13 +754,16 @@ def save(operator, context, filepath,
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
             # Decide what matters by presence of f-curves
-            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
+            if curves_rotation and fcurves_keyframe_in_range(
+                    curves_rotation, frame_start, frame_end):
                 seq.rotationMatters[index] = True
 
-            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
+            if curves_translation and fcurves_keyframe_in_range(
+                    curves_translation, frame_start, frame_end):
                 seq.translationMatters[index] = True
 
-            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
+            if curves_scale and fcurves_keyframe_in_range(
+                    curves_scale, frame_start, frame_end):
                 seq.scaleMatters[index] = True
 
             # Write the data where it matters
@@ -732,6 +796,7 @@ def save(operator, context, filepath,
 
     return {"FINISHED"}
 
+
 def write_material_textures(mode, filepath, shape, raw_colors):
     if mode == 'disabled':
         return
@@ -757,8 +822,10 @@ def write_material_textures(mode, filepath, shape, raw_colors):
             color.g = linearrgb_to_srgb(color.g)
             color.b = linearrgb_to_srgb(color.b)
 
-        image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
+        image = bpy.data.images.new(material.name.lower() + "_generated", 16,
+                                    16)
         image.pixels = (color.r, color.g, color.b, 1.0) * 256
-        image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")
+        image.filepath_raw = os.path.join(os.path.dirname(filepath),
+                                          material.name + ".png")
         image.file_format = "PNG"
         image.save()

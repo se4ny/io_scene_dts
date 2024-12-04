@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import bpy
 
+
 def find_seqs(scene, select_marker):
     sequences = OrderedDict()
     sequence_flags = {}
@@ -27,7 +28,7 @@ def find_seqs(scene, select_marker):
                 flags = ()
 
             sequence_flags[name] = flags
-    
+
     for marker in scene.timeline_markers:
         if ":" not in marker.name or (select_marker and not marker.select):
             continue
@@ -39,7 +40,9 @@ def find_seqs(scene, select_marker):
             sequences[name] = {}
 
         if what in sequences[name]:
-            print("Warning: Got duplicate '{}' marker for sequence '{}' at frame {} (first was at frame {}), ignoring".format(what, name, marker.frame, sequences[name][what].frame))
+            print(
+                "Warning: Got duplicate '{}' marker for sequence '{}' at frame {} (first was at frame {}), ignoring"
+                .format(what, name, marker.frame, sequences[name][what].frame))
             continue
 
         sequences[name][what] = marker

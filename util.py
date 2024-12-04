@@ -32,6 +32,7 @@ for name, color in default_materials.items():
 for key, value in tuple(default_materials.items()):
     default_materials[key.lower()] = value
 
+
 def resolve_texture(filepath, name):
     dirname = os.path.dirname(filepath)
 
@@ -52,58 +53,66 @@ def resolve_texture(filepath, name):
         if prevdir == dirname:
             break
 
+
 def fractions():
     yield 0
 
     for k in count():
-        i = 2 ** k
+        i = 2**k
 
         for j in range(1, i, 2):
             yield j / i
+
 
 def get_hsv_colors():
     for h in fractions():
         yield (h, 0.75, 0.75)
 
+
 def get_rgb_colors():
     return map(lambda hsv: hsv_to_rgb(*hsv), get_hsv_colors())
 
+
 def action_get_or_new(ob):
-  if not ob.animation_data:
-    ob.animation_data_create()
+    if not ob.animation_data:
+        ob.animation_data_create()
 
-  if ob.animation_data.action:
-    return ob.animation_data.action
+    if ob.animation_data.action:
+        return ob.animation_data.action
 
-  action = bpy.data.actions.new(ob.name + "Action")
-  ob.animation_data.action = action
+    action = bpy.data.actions.new(ob.name + "Action")
+    ob.animation_data.action = action
 
-  return action
+    return action
+
 
 def ob_curves_array(ob, data_path, array_count):
-  action = action_get_or_new(ob)
-  curves = [None] * array_count
+    action = action_get_or_new(ob)
+    curves = [None] * array_count
 
-  for curve in action.fcurves:
-    if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
-      continue
+    for curve in action.fcurves:
+        if curve.data_path != data_path or curve.array_index < 0 or curve.array_index >= array_count:
+            continue
 
-    if curves[curve.array_index]:
-      pass # TODO: warn if more than one curve for an array slot
+        if curves[curve.array_index]:
+            pass  # TODO: warn if more than one curve for an array slot
 
-    curves[curve.array_index] = curve
+        curves[curve.array_index] = curve
 
-  for index, curve in enumerate(curves):
-    if curve is None:
-      curves[index] = action.fcurves.new(data_path, index)
+    for index, curve in enumerate(curves):
+        if curve is None:
+            curves[index] = action.fcurves.new(data_path, index)
 
-  return curves
+    return curves
+
 
 def ob_location_curves(ob):
-  return ob_curves_array(ob, "location", 3)
+    return ob_curves_array(ob, "location", 3)
+
 
 def ob_scale_curves(ob):
-  return ob_curves_array(ob, "scale", 3)
+    return ob_curves_array(ob, "scale", 3)
+
 
 def fcurves_path_from_rotation(ob):
     if ob.rotation_mode == 'QUATERNION':
@@ -113,6 +122,7 @@ def fcurves_path_from_rotation(ob):
     else:
         return ('rotation_euler', 3)
 
+
 def ob_rotation_data(ob):
     if ob.rotation_mode == 'QUATERNION':
         return ob.rotation_quaternion
@@ -121,12 +131,15 @@ def ob_rotation_data(ob):
     else:
         return ob.rotation_euler
 
+
 def ob_rotation_curves(ob):
     data_path, array_count = fcurves_path_from_rotation(ob)
     return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
+
 def evaluate_all(curves, frame):
     return tuple(map(lambda c: c.evaluate(frame), curves))
+
 
 def array_from_fcurves(curves, data_path, array_size):
     found = False
@@ -140,9 +153,11 @@ def array_from_fcurves(curves, data_path, array_size):
     if found:
         return tuple(array)
 
+
 def array_from_fcurves_rotation(curves, ob):
     data_path, array_count = fcurves_path_from_rotation(ob)
     return array_from_fcurves(curves, data_path, array_count)
+
 
 def fcurves_keyframe_in_range(curves, start, end):
     for curve in curves:
@@ -153,10 +168,12 @@ def fcurves_keyframe_in_range(curves, start, end):
 
     return False
 
+
 def find_reference(scene):
     reference_marker = scene.timeline_markers.get("reference")
     if reference_marker is not None:
         return reference_marker.frame
+
 
 def fail(operator, message):
     print("Error:", message)

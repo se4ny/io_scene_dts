@@ -9,9 +9,8 @@ from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
     array_from_fcurves_rotation, fcurves_keyframe_in_range, find_reference
 from .shared_export import find_seqs
 
-def save(operator, context, filepath,
-         select_marker=False,
-         debug_report=False):
+
+def save(operator, context, filepath, select_marker=False, debug_report=False):
     print("Exporting scene to DSQ")
 
     scene = context.scene
@@ -55,8 +54,8 @@ def save(operator, context, filepath,
         order_key = {}
 
     # Sort by node indices from the DTS
-    dsq.nodes.sort(key=lambda n:
-        order_key.get(n, node_ob[n].get("nodeIndex", sys.maxsize)))
+    dsq.nodes.sort(key=lambda n: order_key.get(
+        n, node_ob[n].get("nodeIndex", sys.maxsize)))
 
     node_index = {node_ob[name]: i for i, name in enumerate(dsq.nodes)}
     auto_root_index = None
@@ -84,10 +83,12 @@ def save(operator, context, filepath,
         print("Exporting sequence", name)
 
         if "start" not in markers:
-            return fail(operator, "Missing start marker for sequence '{}'".format(name))
+            return fail(operator,
+                        "Missing start marker for sequence '{}'".format(name))
 
         if "end" not in markers:
-            return fail(operator, "Missing end marker for sequence '{}'".format(name))
+            return fail(operator,
+                        "Missing end marker for sequence '{}'".format(name))
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
@@ -99,7 +100,8 @@ def save(operator, context, filepath,
         seq.priority = 1
 
         seq.toolBegin = frame_start
-        seq.duration = frame_range * (context.scene.render.fps_base / context.scene.render.fps)
+        seq.duration = frame_range * (context.scene.render.fps_base /
+                                      context.scene.render.fps)
 
         if name in sequence_flags:
             for part in sequence_flags[name]:
@@ -115,7 +117,8 @@ def save(operator, context, filepath,
                 elif flag == "duration":
                     seq.duration = float(data)
                 else:
-                    print("Warning: Unknown flag '{}' (used by sequence '{}')".format(flag, name))
+                    print("Warning: Unknown flag '{}' (used by sequence '{}')".
+                          format(flag, name))
 
         seq.numKeyframes = frame_range
         seq.firstGroundFrame = len(dsq.ground_translations)
@@ -160,13 +163,16 @@ def save(operator, context, filepath,
             curves_scale = array_from_fcurves(fcurves, "scale", 3)
 
             # Decide what matters by presence of f-curves
-            if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
+            if curves_rotation and fcurves_keyframe_in_range(
+                    curves_rotation, frame_start, frame_end):
                 seq.rotationMatters[index] = True
 
-            if curves_translation and fcurves_keyframe_in_range(curves_translation, frame_start, frame_end):
+            if curves_translation and fcurves_keyframe_in_range(
+                    curves_translation, frame_start, frame_end):
                 seq.translationMatters[index] = True
 
-            if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
+            if curves_scale and fcurves_keyframe_in_range(
+                    curves_scale, frame_start, frame_end):
                 seq.scaleMatters[index] = True
 
             # Write the data where it matters

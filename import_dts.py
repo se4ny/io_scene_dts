@@ -13,11 +13,13 @@ from itertools import zip_longest, count
 from functools import reduce
 from random import random
 
+
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
+
 
 def dedup_name(group, name):
     if name not in group:
@@ -28,6 +30,7 @@ def dedup_name(group, name):
 
         if new_name not in group:
             return new_name
+
 
 def import_material(color_source, dmat, filepath):
     bmat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
@@ -62,7 +65,7 @@ def import_material(color_source, dmat, filepath):
                 bmat.diffuse_color = color[:3]
     elif dmat.name.lower() in default_materials:
         bmat.diffuse_color = default_materials[dmat.name.lower()]
-    else: # give it a random color
+    else:  # give it a random color
         bmat.diffuse_color = color_source.__next__()
 
     if dmat.flags & Material.SelfIlluminating:
@@ -89,9 +92,12 @@ def import_material(color_source, dmat, filepath):
 
     return bmat
 
+
 class index_pass:
+
     def __getitem__(self, item):
         return item
+
 
 def create_bmesh(dmesh, materials, shape):
     me = bpy.data.meshes.new("Mesh")
@@ -118,23 +124,31 @@ def create_bmesh(dmesh, materials, shape):
 
         if prim.type & Primitive.Strip:
             even = True
-            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
+            for i in range(prim.firstElement + 2,
+                           prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                    faces.append(
+                        ((indices[i], indices[i - 1], indices[i - 2]), dmat))
                 else:
-                    faces.append(((indices[i - 2], indices[i - 1], indices[i]), dmat))
+                    faces.append(
+                        ((indices[i - 2], indices[i - 1], indices[i]), dmat))
                 even = not even
         elif prim.type & Primitive.Fan:
             even = True
-            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
+            for i in range(prim.firstElement + 2,
+                           prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[0]), dmat))
+                    faces.append(
+                        ((indices[i], indices[i - 1], indices[0]), dmat))
                 else:
-                    faces.append(((indices[0], indices[i - 1], indices[i]), dmat))
+                    faces.append(
+                        ((indices[0], indices[i - 1], indices[i]), dmat))
                 even = not even
-        else: # Default to Triangle Lists (prim.type & Primitive.Triangles)
-            for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements, 3):
-                faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+        else:  # Default to Triangle Lists (prim.type & Primitive.Triangles)
+            for i in range(prim.firstElement + 2,
+                           prim.firstElement + prim.numElements, 3):
+                faces.append(
+                    ((indices[i], indices[i - 1], indices[i - 2]), dmat))
 
     me.vertices.add(len(dmesh.verts))
     me.vertices.foreach_set("co", unpack_list(dmesh.verts))
@@ -147,7 +161,7 @@ def create_bmesh(dmesh, materials, shape):
     uvs = me.uv_layers[0]
 
     for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
-        poly.use_smooth = True # DTS geometry is always smooth shaded
+        poly.use_smooth = True  # DTS geometry is always smooth shaded
         poly.loop_total = 3
         poly.loop_start = i * 3
 
@@ -164,8 +178,10 @@ def create_bmesh(dmesh, materials, shape):
 
     return me
 
+
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
+
 
 def insert_reference(frame, shape_nodes):
     for node in shape_nodes:
@@ -193,7 +209,10 @@ def insert_reference(frame, shape_nodes):
             key.interpolation = "LINEAR"
             key.co = (frame, rot[curve.array_index])
 
-def load(operator, context, filepath,
+
+def load(operator,
+         context,
+         filepath,
          reference_keyframe=True,
          import_sequences=True,
          use_armature=False,
@@ -241,7 +260,8 @@ def load(operator, context, filepath,
         # Calculate armature-space matrix, head and tail for each node
         for i, node in enumerate(shape.nodes):
             node.mat = shape.default_rotations[i].to_matrix()
-            node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+            node.mat = Matrix.Translation(
+                shape.default_translations[i]) * node.mat.to_4x4()
             if node.parent != -1:
                 node.mat = shape.nodes[node.parent].mat * node.mat
             # node.head = node.mat.to_translation()
@@ -277,7 +297,8 @@ def load(operator, context, filepath,
             reference_marker = context.scene.timeline_markers.get("reference")
             if reference_marker is None:
                 reference_frame = 0
-                context.scene.timeline_markers.new("reference", reference_frame)
+                context.scene.timeline_markers.new("reference",
+                                                   reference_frame)
             else:
                 reference_frame = reference_marker.frame
         else:
@@ -285,7 +306,8 @@ def load(operator, context, filepath,
 
         # Create an empty for every node
         for i, node in enumerate(shape.nodes):
-            ob = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[node.name]), None)
+            ob = bpy.data.objects.new(
+                dedup_name(bpy.data.objects, shape.names[node.name]), None)
             node.bl_ob = ob
             ob["nodeIndex"] = i
             ob.empty_draw_type = "SINGLE_ARROW"
@@ -297,7 +319,9 @@ def load(operator, context, filepath,
             ob.location = shape.default_translations[i]
             ob.rotation_mode = "QUATERNION"
             ob.rotation_quaternion = shape.default_rotations[i]
-            if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
+            if shape.names[
+                    node.
+                    name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
                 ob.rotation_quaternion = (1, 0, 0, 0)
 
             context.scene.objects.link(ob)
@@ -332,9 +356,20 @@ def load(operator, context, filepath,
             if flags:
                 sequences_text.append(name + ": " + ", ".join(flags))
 
-            nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
-            nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
-            nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
+            nodesRotation = tuple(
+                map(
+                    lambda p: p[0],
+                    filter(lambda p: p[1], zip(shape.nodes,
+                                               seq.rotationMatters))))
+            nodesTranslation = tuple(
+                map(
+                    lambda p: p[0],
+                    filter(lambda p: p[1],
+                           zip(shape.nodes, seq.translationMatters))))
+            nodesScale = tuple(
+                map(lambda p: p[0],
+                    filter(lambda p: p[1], zip(shape.nodes,
+                                               seq.scaleMatters))))
 
             step = 1
 
@@ -343,10 +378,16 @@ def load(operator, context, filepath,
                 curves = ob_location_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
-                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    vec = shape.node_translations[seq.baseTranslation +
+                                                  mattersIndex *
+                                                  seq.numKeyframes +
+                                                  frameIndex]
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
-                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
+                            return fail(
+                                operator,
+                                "Missing 'reference' marker for blend animation '{}'"
+                                .format(name))
                         ref_vec = Vector(evaluate_all(curves, reference_frame))
                         vec = ref_vec + vec
 
@@ -354,20 +395,25 @@ def load(operator, context, filepath,
                         curve.keyframe_points.add(1)
                         key = curve.keyframe_points[-1]
                         key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            vec[curve.array_index])
+                        key.co = (globalToolIndex + frameIndex * step,
+                                  vec[curve.array_index])
 
             for mattersIndex, node in enumerate(nodesRotation):
                 ob = node_obs_val[node]
                 mode, curves = ob_rotation_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
-                    rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+                    rot = shape.node_rotations[seq.baseRotation +
+                                               mattersIndex * seq.numKeyframes
+                                               + frameIndex]
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
-                            return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
-                        ref_rot = Quaternion(evaluate_all(curves, reference_frame))
+                            return fail(
+                                operator,
+                                "Missing 'reference' marker for blend animation '{}'"
+                                .format(name))
+                        ref_rot = Quaternion(
+                            evaluate_all(curves, reference_frame))
                         rot = ref_rot * rot
                     if mode == 'AXIS_ANGLE':
                         rot = rot.to_axis_angle()
@@ -378,9 +424,8 @@ def load(operator, context, filepath,
                         curve.keyframe_points.add(1)
                         key = curve.keyframe_points[-1]
                         key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            rot[curve.array_index])
+                        key.co = (globalToolIndex + frameIndex * step,
+                                  rot[curve.array_index])
 
             for mattersIndex, node in enumerate(nodesScale):
                 ob = node_obs_val[node]
@@ -388,7 +433,10 @@ def load(operator, context, filepath,
 
                 for frameIndex in range(seq.numKeyframes):
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
-                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    vec = shape.node_translations[seq.baseTranslation +
+                                                  mattersIndex *
+                                                  seq.numKeyframes +
+                                                  frameIndex]
 
                     if seq.flags & Sequence.UniformScale:
                         s = shape.node_uniform_scales[index]
@@ -396,7 +444,9 @@ def load(operator, context, filepath,
                     elif seq.flags & Sequence.AlignedScale:
                         vec = shape.node_aligned_scales[index]
                     elif seq.flags & Sequence.ArbitraryScale:
-                        print("Warning: Arbitrary scale animation not implemented")
+                        print(
+                            "Warning: Arbitrary scale animation not implemented"
+                        )
                         break
                     else:
                         print("Warning: Invalid scale flags found in sequence")
@@ -406,15 +456,16 @@ def load(operator, context, filepath,
                         curve.keyframe_points.add(1)
                         key = curve.keyframe_points[-1]
                         key.interpolation = "LINEAR"
-                        key.co = (
-                            globalToolIndex + frameIndex * step,
-                            vec[curve.array_index])
+                        key.co = (globalToolIndex + frameIndex * step,
+                                  vec[curve.array_index])
 
             # Insert a reference frame immediately before the animation
             # insert_reference(globalToolIndex - 2, shape.nodes)
 
-            context.scene.timeline_markers.new(name + ":start", globalToolIndex)
-            context.scene.timeline_markers.new(name + ":end", globalToolIndex + seq.numKeyframes * step - 1)
+            context.scene.timeline_markers.new(name + ":start",
+                                               globalToolIndex)
+            context.scene.timeline_markers.new(
+                name + ":end", globalToolIndex + seq.numKeyframes * step - 1)
             globalToolIndex += seq.numKeyframes * step + 30
 
         if "Sequences" in bpy.data.texts:
@@ -427,8 +478,8 @@ def load(operator, context, filepath,
     # Then put objects in the armatures
     for obj in shape.objects:
         if obj.node == -1:
-            print('Warning: Object {} is not attached to a node, ignoring'
-                  .format(shape.names[obj.name]))
+            print('Warning: Object {} is not attached to a node, ignoring'.
+                  format(shape.names[obj.name]))
             continue
 
         for meshIndex in range(obj.numMeshes):
@@ -439,12 +490,14 @@ def load(operator, context, filepath,
                 continue
 
             if mtype != Mesh.StandardType and mtype != Mesh.SkinType:
-                print('Warning: Mesh #{} of object {} is of unsupported type {}, ignoring'.format(
-                    meshIndex + 1, mtype, shape.names[obj.name]))
+                print(
+                    'Warning: Mesh #{} of object {} is of unsupported type {}, ignoring'
+                    .format(meshIndex + 1, mtype, shape.names[obj.name]))
                 continue
 
             bmesh = create_bmesh(mesh, materials, shape)
-            bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
+            bobj = bpy.data.objects.new(
+                dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
             context.scene.objects.link(bobj)
 
             add_vertex_groups(mesh, bobj, shape)
@@ -471,14 +524,22 @@ def load(operator, context, filepath,
     # Import a bounds mesh
     me = bpy.data.meshes.new("Mesh")
     me.vertices.add(8)
-    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.min.z)
-    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.min.z)
-    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.max.z)
-    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.max.z)
-    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.max.z)
+    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y,
+                         shape.bounds.min.z)
+    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y,
+                         shape.bounds.min.z)
+    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y,
+                         shape.bounds.min.z)
+    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y,
+                         shape.bounds.min.z)
+    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y,
+                         shape.bounds.max.z)
+    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y,
+                         shape.bounds.max.z)
+    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y,
+                         shape.bounds.max.z)
+    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y,
+                         shape.bounds.max.z)
     me.validate()
     me.update()
     ob = bpy.data.objects.new("bounds", me)
@@ -487,10 +548,11 @@ def load(operator, context, filepath,
 
     return {"FINISHED"}
 
+
 def add_vertex_groups(mesh, ob, shape):
     for node, initial_transform in mesh.bones:
         # TODO: Handle initial_transform
         ob.vertex_groups.new(shape.names[shape.nodes[node].name])
 
     for vertex, bone, weight in mesh.influences:
-        ob.vertex_groups[bone].add((vertex,), weight, 'REPLACE')
+        ob.vertex_groups[bone].add((vertex, ), weight, 'REPLACE')

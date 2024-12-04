@@ -2,34 +2,38 @@ from .DtsTypes import Sequence, Trigger, Vector, Quaternion
 from struct import pack, unpack, calcsize
 from ctypes import c_byte, c_short, c_int
 
+
 def read(fd, fmt):
     return unpack(fmt, fd.read(calcsize(fmt)))
+
 
 def write(fd, fmt, *values):
     fd.write(pack(fmt, *values))
 
+
 def write_quat(fd, q):
     write(fd, "4h",
-        c_short(int(q.x *  32767)).value,
-        c_short(int(q.y *  32767)).value,
-        c_short(int(q.z *  32767)).value,
-        c_short(int(q.w * -32767)).value)
+          c_short(int(q.x * 32767)).value,
+          c_short(int(q.y * 32767)).value,
+          c_short(int(q.z * 32767)).value,
+          c_short(int(q.w * -32767)).value)
+
 
 def write_vec(fd, v):
     write(fd, "3f", v.x, v.y, v.z)
 
+
 def read_quat(fd):
     x, y, z, w = read(fd, "4h")
-    return Quaternion((
-        w / -32767,
-        x /  32767,
-        y /  32767,
-        z /  32767))
+    return Quaternion((w / -32767, x / 32767, y / 32767, z / 32767))
+
 
 def read_vec(fd):
     return Vector(read(fd, "3f"))
 
+
 class DsqFile:
+
     def __init__(self):
         self.nodes = []
         self.rotations = []
@@ -44,6 +48,7 @@ class DsqFile:
         self.triggers = []
 
     def write_dump(self, fd):
+
         def p(s):
             fd.write(s + "\n")
 
@@ -52,7 +57,8 @@ class DsqFile:
         p("# uniform_scales: {}".format(len(self.uniform_scales)))
         p("# aligned_scales: {}".format(len(self.aligned_scales)))
         p("# arbitrary_scale_rots: {}".format(len(self.arbitrary_scale_rots)))
-        p("# arbitrary_scale_factors: {}".format(len(self.arbitrary_scale_factors)))
+        p("# arbitrary_scale_factors: {}".format(
+            len(self.arbitrary_scale_factors)))
         p("# ground_translations: {}".format(len(self.ground_translations)))
         p("# ground_rotations: {}".format(len(self.ground_rotations)))
 
@@ -65,9 +71,12 @@ class DsqFile:
             p("  {}: {}".format(i, seq.name))
             p("    numKeyframes = {}".format(seq.numKeyframes))
             p("    duration = {}".format(seq.duration))
-            p("    rotationMatters = {}".format("".join(map(str, map(int, seq.rotationMatters)))))
-            p("    translationMatters = {}".format("".join(map(str, map(int, seq.translationMatters)))))
-            p("    scaleMatters = {}".format("".join(map(str, map(int, seq.scaleMatters)))))
+            p("    rotationMatters = {}".format("".join(
+                map(str, map(int, seq.rotationMatters)))))
+            p("    translationMatters = {}".format("".join(
+                map(str, map(int, seq.translationMatters)))))
+            p("    scaleMatters = {}".format("".join(
+                map(str, map(int, seq.scaleMatters)))))
 
     def write_name(self, fd, name):
         write(fd, "<i", len(name))
@@ -84,7 +93,7 @@ class DsqFile:
         # not even TGE does
         write(fd, "<i", 0)
 
-        write(fd, "<i", 0) # old_shape_num_objects
+        write(fd, "<i", 0)  # old_shape_num_objects
 
         # write all the node states for keyframes
         write(fd, "<i", len(self.rotations))
@@ -101,7 +110,8 @@ class DsqFile:
         for vec in self.aligned_scales:
             write_vec(fd, vec)
 
-        assert len(self.arbitrary_scale_rots) == len(self.arbitrary_scale_factors)
+        assert len(self.arbitrary_scale_rots) == len(
+            self.arbitrary_scale_factors)
         write(fd, "<i", len(self.arbitrary_scale_rots))
         for quat in self.arbitrary_scale_rots:
             write_quat(fd, quat)
@@ -123,27 +133,27 @@ class DsqFile:
         for seq in self.sequences:
             assert isinstance(seq.name, str)
             self.write_name(fd, seq.name)
-            seq.write(fd, False) # don't write name index
+            seq.write(fd, False)  # don't write name index
 
         # now for triggers, apparently
         write(fd, "<i", len(self.triggers))
         for trigger in self.triggers:
-            write(fd, "<i", trigger.state) # just a guess
+            write(fd, "<i", trigger.state)  # just a guess
             write(fd, "<f", trigger.pos)
 
     def read_name(self, fd):
-        (size,) = read(fd, "<i")
+        (size, ) = read(fd, "<i")
         return fd.read(size).decode("cp1252")
 
     def read(self, fd):
-        (version,) = read(fd, "<i")
+        (version, ) = read(fd, "<i")
         assert version <= 24, "dsq >v24 not supported yet"
 
-        (num_nodes,) = read(fd, "<i")
+        (num_nodes, ) = read(fd, "<i")
         self.nodes = [self.read_name(fd) for i in range(num_nodes)]
 
         # Legacy data
-        read(fd, "<i") # sz
+        read(fd, "<i")  # sz
         old_shape_num_objects = read(fd, "<i")
 
         if version < 17:
@@ -151,17 +161,23 @@ class DsqFile:
 
         if version > 21:
             self.rotations = [read_quat(fd) for i in range(read(fd, "<i")[0])]
-            self.translations = [read_vec(fd) for i in range(read(fd, "<i")[0])]
-            self.uniform_scales = [read(fd, "<f") for i in range(read(fd, "<i")[0])]
-            self.aligned_scales = [read_vec(fd) for i in range(read(fd, "<i")[0])]
-            (sz,) = read(fd, "<i")
+            self.translations = [
+                read_vec(fd) for i in range(read(fd, "<i")[0])
+            ]
+            self.uniform_scales = [
+                read(fd, "<f") for i in range(read(fd, "<i")[0])
+            ]
+            self.aligned_scales = [
+                read_vec(fd) for i in range(read(fd, "<i")[0])
+            ]
+            (sz, ) = read(fd, "<i")
             self.arbitrary_scale_rots = [read_quat(fd) for i in range(sz)]
             self.arbitrary_scale_factors = [read_vec(fd) for i in range(sz)]
-            (sz,) = read(fd, "<i")
+            (sz, ) = read(fd, "<i")
             self.ground_translations = [read_vec(fd) for i in range(sz)]
             self.ground_rotations = [read_quat(fd) for i in range(sz)]
         else:
-            (sz,) = read(fd, "<i")
+            (sz, ) = read(fd, "<i")
             self.rotations = [None] * sz
             self.translations = [None] * sz
             for i in range(sz):
@@ -172,7 +188,7 @@ class DsqFile:
         read(fd, "<i")
 
         # now read sequences
-        (num_seqs,) = read(fd, "<i")
+        (num_seqs, ) = read(fd, "<i")
         self.sequences = [None] * num_seqs
         for i in range(num_seqs):
             name = self.read_name(fd)
@@ -181,7 +197,7 @@ class DsqFile:
 
         # and finally, triggers
         if version > 8:
-            (num_sjws,) = read(fd, "<i")
+            (num_sjws, ) = read(fd, "<i")
             self.triggers = [None] * num_sjws
             for i in range(num_sjws):
                 self.triggers[i] = Trigger(0, 0)
