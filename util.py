@@ -226,7 +226,7 @@ def find_reference(scene):
         return reference_marker.frame
 
 
-def fail(operator, message):
+def fail(operator: bpy.types.Operator, message: str) -> set[str]:
     print("Error:", message)
     operator.report({"ERROR"}, message)
     return {"FINISHED"}

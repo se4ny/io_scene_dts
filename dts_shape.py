@@ -1,5 +1,6 @@
 """  """
 
+import io
 import mathutils
 import struct
 
@@ -262,8 +263,8 @@ class Shape(object):
         for mat in self.materials:
             dts_stream.ws(fd, "f", mat.reflectance)
 
-    def load(self, fd: str) -> None:
-        stream = dts_stream.InStream(fd)
+    def load(self, buffer: io.BufferedReader) -> None:
+        stream = dts_stream.InStream(buffer)
 
         # Header
         n_node = stream.read32()
@@ -449,40 +450,40 @@ class Shape(object):
                 self.alphaOut[i] = stream.read32()
 
         # Done with the tribuffer section
-        n_sequence = struct.unpack("i", fd.read(4))[0]
+        n_sequence = struct.unpack("i", buffer.read(4))[0]
         self.sequences = [None] * n_sequence
 
         for i in range(n_sequence):
-            self.sequences[i] = dts_types.Sequence.read(fd)
+            self.sequences[i] = dts_types.Sequence.read(buffer)
 
-        material_type = struct.unpack("b", fd.read(1))[0]
+        material_type = struct.unpack("b", buffer.read(1))[0]
         assert material_type == 0x1
 
-        n_material = struct.unpack("i", fd.read(4))[0]
+        n_material = struct.unpack("i", buffer.read(4))[0]
         self.materials = [dts_types.Material() for i in range(n_material)]
 
         for i in range(n_material):
             if stream.dtsVersion >= 26:
-                length = struct.unpack("i", fd.read(4))[0]
+                length = struct.unpack("i", buffer.read(4))[0]
             else:
-                length = struct.unpack("B", fd.read(1))[0]
+                length = struct.unpack("B", buffer.read(1))[0]
 
-            self.materials[i].name = fd.read(length).decode("cp1252")
+            self.materials[i].name = buffer.read(length).decode("cp1252")
 
         for i in range(n_material):
-            self.materials[i].flags = struct.unpack("I", fd.read(4))[0]
+            self.materials[i].flags = struct.unpack("I", buffer.read(4))[0]
         for i in range(n_material):
-            self.materials[i].reflectanceMap = struct.unpack("i", fd.read(4))[0]
+            self.materials[i].reflectanceMap = struct.unpack("i", buffer.read(4))[0]
         for i in range(n_material):
-            self.materials[i].bumpMap = struct.unpack("i", fd.read(4))[0]
+            self.materials[i].bumpMap = struct.unpack("i", buffer.read(4))[0]
         for i in range(n_material):
-            self.materials[i].detailMap = struct.unpack("i", fd.read(4))[0]
+            self.materials[i].detailMap = struct.unpack("i", buffer.read(4))[0]
 
         if stream.dtsVersion == 25:
             for i in range(n_material):
-                fd.read(4)
+                buffer.read(4)
 
         for i in range(n_material):
-            self.materials[i].detailScale = struct.unpack("f", fd.read(4))[0]
+            self.materials[i].detailScale = struct.unpack("f", buffer.read(4))[0]
         for i in range(n_material):
-            self.materials[i].reflectance = struct.unpack("f", fd.read(4))[0]
+            self.materials[i].reflectance = struct.unpack("f", buffer.read(4))[0]

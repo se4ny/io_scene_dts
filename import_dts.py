@@ -278,8 +278,8 @@ def load(operator: bpy.types.Operator,
     """
     shape = dts_shape.Shape()
 
-    with open(filepath, "rb") as fd:
-        shape.load(fd)
+    with open(filepath, "rb") as shapefile:
+        shape.load(shapefile)
 
     if debug_report:
         write_report.write_debug_report(filepath + ".txt", shape)
@@ -290,7 +290,7 @@ def load(operator: bpy.types.Operator,
     materials = {}
 
     # BUG: Blender requires alpha as well.
-    color_source = util.get_rgb_colors()
+    color_source = util.get_rgb_colors() + (1.0,)
 
     for dmat in shape.materials:
         materials[dmat] = import_material(color_source, dmat, filepath)
@@ -313,10 +313,10 @@ def load(operator: bpy.types.Operator,
     if use_armature:
         root_arm = bpy.data.armatures.new(file_base_name(filepath))
         root_ob = bpy.data.objects.new(root_arm.name, root_arm)
-        root_ob.show_x_ray = True
+        root_ob.show_in_front = True
 
-        context.scene.objects.link(root_ob)
-        context.scene.objects.active = root_ob
+        context.scene.collection.objects.link(root_ob)
+        context.scene.collection.objects.active = root_ob
 
         # Calculate armature-space matrix, head and tail for each node
         for i, node in enumerate(shape.nodes):
@@ -330,7 +330,7 @@ def load(operator: bpy.types.Operator,
             # node.tail = node.mat.to_translation()
             # node.head = node.tail - Vector((0, 0, 0.25))
 
-        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.object.mode_set(mode='EDIT')
 
         edit_bone_table = []
         bone_names = []
@@ -352,7 +352,7 @@ def load(operator: bpy.types.Operator,
             edit_bone_table.append(bone)
             bone_names.append(bone.name)
 
-        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.mode_set(mode='OBJECT')
     else:
         if reference_keyframe:
             reference_marker = context.scene.timeline_markers.get("reference")
@@ -566,7 +566,7 @@ def load(operator: bpy.types.Operator,
             if use_armature:
                 bobj.parent = root_ob
                 bobj.parent_bone = bone_names[obj.node]
-                bobj.parent_type = "BONE"
+                bobj.parent_type = 'BONE'
                 bobj.matrix_world = shape.nodes[obj.node].mat
 
                 if mtype == dts_types.Mesh.SkinType:

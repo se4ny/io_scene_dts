@@ -1,8 +1,11 @@
 """  """
 
+import array
 import ctypes
+import io
 import mathutils
 import struct
+import typing
 
 import dts_utils
 
@@ -11,9 +14,9 @@ def ws(fd, spec, *values):
     fd.write(struct.pack(spec, *values))
 
 
-def read_multi(fd, count, spec):
+def read_multi(buffer: io.BufferedReader, count: int, spec: str) -> tuple[typing.Any, ...]:
     spec = str(count) + spec
-    return struct.unpack(spec, fd.read(struct.calcsize(spec)))
+    return struct.unpack(spec, buffer.read(struct.calcsize(spec)))
 
 
 class OutStream(object):
@@ -109,18 +112,18 @@ class OutStream(object):
 class InStream(object):
     """  """
     __slots__ = ('sequence32', 'sequence16', 'sequence8', 'dtsVersion', 'exporterVersion', 'buffer32', 'buffer16', 'buffer8')
-    def __init__(self, fd):
+    def __init__(self, buffer: io.BufferedReader):
         self.sequence32 = ctypes.c_int(0)
         self.sequence16 = ctypes.c_short(0)
         self.sequence8 = ctypes.c_byte(0)
-        self.dtsVersion, self.exporterVersion = struct.unpack("hh", fd.read(4))
-        end8, end32, end16 = struct.unpack("iii", fd.read(12))
+        self.dtsVersion, self.exporterVersion = struct.unpack("hh", buffer.read(4))
+        end8, end32, end16 = struct.unpack("iii", buffer.read(12))
         num32 = end32
         num16 = (end16 - end32) * 2
         num8 = (end8 - end16) * 4
-        self.buffer32 = bytearray("i", read_multi(fd, num32, "i"))
-        self.buffer16 = bytearray("h", read_multi(fd, num16, "h"))
-        self.buffer8 = bytearray("b", read_multi(fd, num8, "b"))
+        self.buffer32 = array.array("i", read_multi(buffer, num32, "i"))
+        self.buffer16 = array.array("h", read_multi(buffer, num16, "h"))
+        self.buffer8 = array.array("b", read_multi(buffer, num8, "b"))
         self.tell32 = 0
         self.tell16 = 0
         self.tell8 = 0
@@ -188,7 +191,7 @@ class InStream(object):
         
         :raises :py:`EOFError`:
         """
-        buf = bytearray()
+        buf = array.array()
         while True:
             byte = self.read8()
             if byte == 0:

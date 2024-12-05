@@ -437,8 +437,21 @@ def menu_func_export_dsq(self, context):
     self.layout.operator(ExportDSQ.bl_idname, text="Torque Sequences (.dsq)")
 
 
+classes = (
+    ImportDTS,
+    ImportDSQ,
+    ExportDTS,
+    ExportDSQ,
+    SplitMeshIndex,
+    HideBlockheadNodes,
+    TorqueMaterialProperties,
+    TorqueMaterialPanel,
+)
+
+
 def register() -> None:
-    bpy.utils.register_module(__name__)
+    for cls in classes:
+        bpy.utils.register_class(cls)
 
     bpy.types.Material.torque_props = PointerProperty(
         type=TorqueMaterialProperties)
@@ -450,14 +463,15 @@ def register() -> None:
 
 
 def unregister() -> None:
-    bpy.utils.unregister_module(__name__)
-
-    del bpy.types.Material.torque_props
-
     bpy.types.INFO_MT_file_import.remove(menu_func_import_dts)
     bpy.types.INFO_MT_file_import.remove(menu_func_import_dsq)
     bpy.types.INFO_MT_file_export.remove(menu_func_export_dts)
     bpy.types.INFO_MT_file_export.remove(menu_func_export_dsq)
+
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
+
+    del bpy.types.Material.torque_props
 
 
 if __name__ == "__main__":
