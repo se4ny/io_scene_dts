@@ -1,229 +1,49 @@
-from struct import pack, unpack, calcsize
-from array import array
-from ctypes import c_byte, c_short, c_int
+"""  """
 
-from .DtsTypes import *
+import mathutils
+import struct
 
-
-# Shortcut for reading & writing struct data from & to a file descriptor
-def ws(fd, spec, *values):
-    fd.write(pack(spec, *values))
+import dts_utils
+import dts_stream
+import dts_types
 
 
-def read_multi(fd, count, spec):
-    spec = str(count) + spec
-    return unpack(spec, fd.read(calcsize(spec)))
-
-
-class DtsOutputStream(object):
-
-    def __init__(self, dtsVersion=24, exporterVersion=0):
-        self.dtsVersion = dtsVersion
-        self.exporterVersion = exporterVersion
-        self.sequence32 = c_int(0)
-        self.sequence16 = c_short(0)
-        self.sequence8 = c_byte(0)
-        self.buffer32 = []
-        self.buffer16 = []
-        self.buffer8 = []
-
-    def guard(self, specific=None):
-        if specific != None:
-            assert c_int(specific).value == self.sequence32.value
-        self.write32(self.sequence32.value)
-        self.write16(self.sequence16.value)
-        self.write8(self.sequence8.value)
-        self.sequence32.value += 1
-        self.sequence16.value += 1
-        self.sequence8.value += 1
-
-    def flush(self, fd):
-        # Force all buffers to have a size multiple of 4 bytes
-        if len(self.buffer16) % 2 == 1: self.buffer16.append(0)
-        while len(self.buffer8) % 4 != 0:
-            self.buffer8.append(0)
-
-        end32 = len(self.buffer32)
-        end16 = end32 + len(self.buffer16) // 2
-        end8 = end16 + len(self.buffer8) // 4
-
-        fd.write(
-            pack("hhiii", self.dtsVersion, self.exporterVersion, end8, end32,
-                 end16))
-        fd.write(pack(str(len(self.buffer32)) + "i", *self.buffer32))
-        fd.write(pack(str(len(self.buffer16)) + "h", *self.buffer16))
-        fd.write(pack(str(len(self.buffer8)) + "b", *self.buffer8))
-
-    def write32(self, *values):
-        for value in values:
-            assert -2147483648 <= value <= 2147483647, "value {} out of range".format(
-                value)
-            assert type(value) == int, "type is {}, must be {}".format(
-                type(value), int)
-        self.buffer32.extend(values)
-
-    def write16(self, *values):
-        #for value in values:
-        #	assert -32768 <= value <= 32767, "value {} out of range".format(value)
-        #	assert type(value) == int, "type is {}, must be {}".format(type(value), int)
-        #self.buffer16.extend(values)
-        self.buffer16.extend(map(lambda v: c_short(int(v)).value, values))
-
-    def write8(self, *values):
-        for value in values:
-            assert -128 <= value <= 127, "value {} out of range".format(value)
-            assert type(value) == int, "type is {}, must be {}".format(
-                type(value), int)
-        self.buffer8.extend(values)
-
-    def write_u8(self, num):
-        assert 0 <= num <= 255, num
-        self.write8(unpack("b", pack("B", num))[0])
-
-    def write_float(self, *values):
-        self.write32(*map(lambda f: unpack("i", pack("f", f))[0], values))
-
-    def write_string(self, string):
-        self.write8(*string.encode("cp1252"))
-        self.write8(0)
-
-    def write_vec3(self, v):
-        self.write_float(v.x, v.y, v.z)
-
-    def write_vec2(self, v):
-        self.write_float(v.x, v.y)
-
-    def write_box(self, box):
-        self.write_vec3(box.min)
-        self.write_vec3(box.max)
-
-    def write_quat(self, quat):
-        self.write16(
-            c_short(int(quat.x * 32767)).value,
-            c_short(int(quat.y * 32767)).value,
-            c_short(int(quat.z * 32767)).value,
-            c_short(int(quat.w * -32767)).value)
-
-
-class DtsInputStream(object):
-
-    def __init__(self, fd):
-        self.sequence32 = c_int(0)
-        self.sequence16 = c_short(0)
-        self.sequence8 = c_byte(0)
-        self.dtsVersion, self.exporterVersion = unpack("hh", fd.read(4))
-        end8, end32, end16 = unpack("iii", fd.read(12))
-        num32 = end32
-        num16 = (end16 - end32) * 2
-        num8 = (end8 - end16) * 4
-        self.buffer32 = array("i", read_multi(fd, num32, "i"))
-        self.buffer16 = array("h", read_multi(fd, num16, "h"))
-        self.buffer8 = array("b", read_multi(fd, num8, "b"))
-        self.tell32 = 0
-        self.tell16 = 0
-        self.tell8 = 0
-
-    def guard(self, specific=None):
-        if specific != None:
-            assert c_int(specific).value == self.sequence32.value
-        assert self.sequence32.value == self.read32()
-        assert self.sequence16.value == self.read16()
-        assert self.sequence8.value == self.read8()
-        self.sequence32.value += 1
-        self.sequence16.value += 1
-        self.sequence8.value += 1
-
-    def read32(self):
-        if self.tell32 >= len(self.buffer32):
-            raise EOFError()
-
-        data = self.buffer32[self.tell32]
-        self.tell32 += 1
-        return data
-
-    def read16(self):
-        if self.tell16 >= len(self.buffer16):
-            raise EOFError()
-
-        data = self.buffer16[self.tell16]
-        self.tell16 += 1
-        return data
-
-    def read8(self):
-        if self.tell8 >= len(self.buffer8):
-            raise EOFError()
-
-        data = self.buffer8[self.tell8]
-        self.tell8 += 1
-        return data
-
-    def read_float(self):
-        return unpack("f", pack("i", self.read32()))[0]
-
-    def read_string(self):
-        buf = bytearray()
-        while True:
-            byte = self.read8()
-            if byte == 0:
-                break
-            else:
-                buf.append(byte)
-        return buf.decode("cp1252")
-
-    def read_vec3(self):
-        return Vector(
-            (self.read_float(), self.read_float(), self.read_float()))
-
-    def read_vec2(self):
-        return Vector((self.read_float(), self.read_float()))
-
-    def read_box(self):
-        return Box(self.read_vec3(), self.read_vec3())
-
-    def read_quat(self):
-        x = self.read16() / 32767
-        y = self.read16() / 32767
-        z = self.read16() / 32767
-        w = self.read16() / -32767
-        return Quaternion((w, x, y, z))
-
-
-class DtsShape(object):
-
-    def __init__(self):
-        self.nodes = []
-        self.objects = []
+class Shape(object):
+    """  """
+    def __init__(self) -> None:
+        self.nodes: list[dts_types.Node] = []
+        self.objects: list[dts_types.Object] = []
         self.decals = []
-        self.subshapes = []
-        self.iflmaterials = []
-        self.materials = []
-        self.default_rotations = []
-        self.default_translations = []
-        self.node_rotations = []
-        self.node_translations = []
-        self.node_uniform_scales = []
-        self.node_aligned_scales = []
-        self.node_arbitrary_scale_factors = []
-        self.node_arbitrary_scale_rots = []
-        self.ground_translations = []
-        self.ground_rotations = []
-        self.objectstates = []
-        self.decalstates = []
-        self.triggers = []
-        self.detail_levels = []
-        self.meshes = []
-        self.sequences = []
-        self.names = []
-        self._names_lookup = {}
+        self.subshapes: list[dts_types.Subshape] = []
+        self.iflmaterials: list[dts_types.IflMaterial] = []
+        self.materials: list[dts_types.Material] = []
+        self.default_rotations: list[None | mathutils.Quaternion] = []
+        self.default_translations: list[None | mathutils.Vector] = []
+        self.node_rotations: list[mathutils.Quaternion] = []
+        self.node_translations: list[mathutils.Vector] = []
+        self.node_uniform_scales: list[float] = []
+        self.node_aligned_scales: list[mathutils.Vector] = []
+        self.node_arbitrary_scale_factors: list[mathutils.Vector] = []
+        self.node_arbitrary_scale_rots: list[mathutils.Quaternion] = []
+        self.ground_translations: list[mathutils.Vector] = []
+        self.ground_rotations: list[mathutils.Quaternion] = []
+        self.objectstates: list[dts_types.ObjectState] = []
+        self.decalstates: list[int] = []
+        self.triggers: list[dts_types.Trigger] = []
+        self.detail_levels: list[dts_types.DetailLevel] = []
+        self.meshes: list[dts_types.Mesh] = []
+        self.sequences: list[dts_types.Sequence] = []
+        self.names: list[str] = []
+        self._names_lookup: dict[str, int] = {}
 
-        self.smallest_size = 0.0
-        self.smallest_detail_level = 0
-        self.radius = 0.0
-        self.radius_tube = 0.0
-        self.center = Vector()
-        self.bounds = Box(Vector(), Vector())
+        self.smallest_size: float = 0.0
+        self.smallest_detail_level: int = 0
+        self.radius: float = 0.0
+        self.radius_tube: float = 0.0
+        self.center: mathutils.Vector = mathutils.Vector()
+        self.bounds: dts_utils.Box = dts_utils.Box(mathutils.Vector(), mathutils.Vector())
 
-    def name(self, string):
+    def name(self, string: str) -> int:
         index = self._names_lookup.get(string.lower())
 
         if index == None:
@@ -233,34 +53,42 @@ class DtsShape(object):
 
         return index
 
-    def name_resolve(self, string):
+    def name_resolve(self, string: str) -> tuple[int, str]:
         index = self.name(string)
         return (index, self.names[index])
 
-    def get_world_mat(self, nodeid):
-        matrix = Matrix()
+    def get_world_mat(self, nodeid: int) -> mathutils.Matrix:
+        matrix = mathutils.Matrix()
 
         while nodeid != -1:
-            cur = Matrix.Translation(
+            cur = mathutils.Matrix.Translation(
                 self.default_translations[nodeid]
             ) * self.default_rotations[nodeid].to_matrix()
             matrix = cur * matrix
             nodeid = self.nodes[nodeid].parent
 
-        return mat
+        return matrix
 
     def verify(self):
+        """  
+        
+        :raises :py:`AssertionError`:
+        """
         assert self.detail_levels
         assert self.subshapes
         assert len(self.nodes) == len(self.default_translations)
         assert len(self.nodes) == len(self.default_rotations)
         assert len(self.objects) == len(self.objectstates)
-        assert len(self.node_arbitrary_scale_factors) == len(
-            self.node_arbitrary_scale_rots)
+        assert len(self.node_arbitrary_scale_factors) == len(self.node_arbitrary_scale_rots)
         assert len(self.ground_translations) == len(self.ground_rotations)
 
-    def save(self, fd, dtsVersion=24):
-        stream = DtsOutputStream(dtsVersion)
+    def save(self, fd: str, dtsVersion: int=24) -> None:
+        """  
+        
+        :raises :py:`EOFError`:
+        :raises :py:`AssertionError`:
+        """
+        stream = dts_stream.OutStream(dtsVersion)
 
         # Header
         stream.write32(
@@ -368,7 +196,7 @@ class DtsShape(object):
             self.write_quat(quat)
         stream.guard(10)
 
-        # Object states
+        # dts_types.Object states
         for state in self.objectstates:
             state.write(stream)
         stream.guard(11)
@@ -402,40 +230,40 @@ class DtsShape(object):
         stream.flush(fd)
 
         # Sequences
-        ws(fd, "<i", len(self.sequences))
+        dts_stream.ws(fd, "<i", len(self.sequences))
 
         for seq in self.sequences:
             seq.write(fd)
 
         # Materials
-        ws(fd, "b", 0x1)
-        ws(fd, "i", len(self.materials))
+        dts_stream.ws(fd, "b", 0x1)
+        dts_stream.ws(fd, "i", len(self.materials))
 
         for mat in self.materials:
             if dtsVersion >= 26:
-                ws(fd, "i", len(mat.name))
+                dts_stream.ws(fd, "i", len(mat.name))
             else:
-                ws(fd, "b", len(mat.name))
+                dts_stream.ws(fd, "b", len(mat.name))
 
             fd.write(mat.name.encode("cp1252"))
         for mat in self.materials:
-            ws(fd, "i", mat.flags)
+            dts_stream.ws(fd, "i", mat.flags)
         for mat in self.materials:
-            ws(fd, "i", mat.reflectanceMap)
+            dts_stream.ws(fd, "i", mat.reflectanceMap)
         for mat in self.materials:
-            ws(fd, "i", mat.bumpMap)
+            dts_stream.ws(fd, "i", mat.bumpMap)
         for mat in self.materials:
-            ws(fd, "i", mat.detailMap)
+            dts_stream.ws(fd, "i", mat.detailMap)
         if dtsVersion == 25:
             for mat in self.materials:
                 fd.write(b"\x00\x00\x00\x00")
         for mat in self.materials:
-            ws(fd, "f", mat.detailScale)
+            dts_stream.ws(fd, "f", mat.detailScale)
         for mat in self.materials:
-            ws(fd, "f", mat.reflectance)
+            dts_stream.ws(fd, "f", mat.reflectance)
 
-    def load(self, fd):
-        stream = DtsInputStream(fd)
+    def load(self, fd: str) -> None:
+        stream = dts_stream.InStream(fd)
 
         # Header
         n_node = stream.read32()
@@ -470,9 +298,7 @@ class DtsShape(object):
         n_mesh = stream.read32()
 
         if stream.dtsVersion < 23:
-            n_skin = stream.read32()
-        else:
-            n_skin = 0
+            _ = stream.read32()
 
         n_name = stream.read32()
         self.smallest_size = stream.read_float()
@@ -487,18 +313,18 @@ class DtsShape(object):
         stream.guard()
 
         # Primary data
-        self.nodes = [Node.read(stream) for i in range(n_node)]
+        self.nodes = [dts_types.Node.read(stream) for i in range(n_node)]
         stream.guard()
-        self.objects = [Object.read(stream) for i in range(n_object)]
+        self.objects = [dts_types.Object.read(stream) for i in range(n_object)]
         stream.guard()
-        self.decals = [Decal.read(stream) for i in range(n_decal)]
+        self.decals = [dts_types.Decal.read(stream) for i in range(n_decal)]
         stream.guard()
-        self.iflmaterials = [IflMaterial.read(stream) for i in range(n_ifl)]
+        self.iflmaterials = [dts_types.IflMaterial.read(stream) for i in range(n_ifl)]
         stream.guard()
 
         # Subshapes
         self.subshapes = [
-            Subshape(0, 0, 0, 0, 0, 0) for i in range(n_subshape)
+            dts_types.Subshape(0, 0, 0, 0, 0, 0) for i in range(n_subshape)
         ]
         for i in range(n_subshape):
             self.subshapes[i].firstNode = stream.read32()
@@ -579,9 +405,9 @@ class DtsShape(object):
             self.ground_translations = [None] * n_groundframe
             self.ground_rotations = [None] * n_groundframe
 
-        # Object states
+        # dts_types.Object states
         self.objectstates = [
-            ObjectState.read(stream) for i in range(n_objectstate)
+            dts_types.ObjectState.read(stream) for i in range(n_objectstate)
         ]
         stream.guard()
 
@@ -590,17 +416,17 @@ class DtsShape(object):
         stream.guard()
 
         # Triggers
-        self.triggers = [Trigger.read(stream) for i in range(n_trigger)]
+        self.triggers = [dts_types.Trigger.read(stream) for i in range(n_trigger)]
         stream.guard()
 
         # Detail levels
         self.detail_levels = [
-            DetailLevel.read(stream) for i in range(n_detaillevel)
+            dts_types.DetailLevel.read(stream) for i in range(n_detaillevel)
         ]
         stream.guard()
 
         # Meshes
-        self.meshes = [Mesh.read(stream) for i in range(n_mesh)]
+        self.meshes = [dts_types.Mesh.read(stream) for i in range(n_mesh)]
         stream.guard()
 
         # Names
@@ -623,40 +449,40 @@ class DtsShape(object):
                 self.alphaOut[i] = stream.read32()
 
         # Done with the tribuffer section
-        n_sequence = unpack("i", fd.read(4))[0]
+        n_sequence = struct.unpack("i", fd.read(4))[0]
         self.sequences = [None] * n_sequence
 
         for i in range(n_sequence):
-            self.sequences[i] = Sequence.read(fd)
+            self.sequences[i] = dts_types.Sequence.read(fd)
 
-        material_type = unpack("b", fd.read(1))[0]
+        material_type = struct.unpack("b", fd.read(1))[0]
         assert material_type == 0x1
 
-        n_material = unpack("i", fd.read(4))[0]
-        self.materials = [Material() for i in range(n_material)]
+        n_material = struct.unpack("i", fd.read(4))[0]
+        self.materials = [dts_types.Material() for i in range(n_material)]
 
         for i in range(n_material):
             if stream.dtsVersion >= 26:
-                length = unpack("i", fd.read(4))[0]
+                length = struct.unpack("i", fd.read(4))[0]
             else:
-                length = unpack("B", fd.read(1))[0]
+                length = struct.unpack("B", fd.read(1))[0]
 
             self.materials[i].name = fd.read(length).decode("cp1252")
 
         for i in range(n_material):
-            self.materials[i].flags = unpack("I", fd.read(4))[0]
+            self.materials[i].flags = struct.unpack("I", fd.read(4))[0]
         for i in range(n_material):
-            self.materials[i].reflectanceMap = unpack("i", fd.read(4))[0]
+            self.materials[i].reflectanceMap = struct.unpack("i", fd.read(4))[0]
         for i in range(n_material):
-            self.materials[i].bumpMap = unpack("i", fd.read(4))[0]
+            self.materials[i].bumpMap = struct.unpack("i", fd.read(4))[0]
         for i in range(n_material):
-            self.materials[i].detailMap = unpack("i", fd.read(4))[0]
+            self.materials[i].detailMap = struct.unpack("i", fd.read(4))[0]
 
         if stream.dtsVersion == 25:
             for i in range(n_material):
                 fd.read(4)
 
         for i in range(n_material):
-            self.materials[i].detailScale = unpack("f", fd.read(4))[0]
+            self.materials[i].detailScale = struct.unpack("f", fd.read(4))[0]
         for i in range(n_material):
-            self.materials[i].reflectance = unpack("f", fd.read(4))[0]
+            self.materials[i].reflectance = struct.unpack("f", fd.read(4))[0]

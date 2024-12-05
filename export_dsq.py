@@ -1,26 +1,26 @@
-import bpy, sys
-from math import sqrt, pi
-from operator import attrgetter
-from itertools import groupby
+"""  """
 
-from .DsqFile import DsqFile
-from .DtsTypes import *
-from .util import fail, evaluate_all, find_reference, array_from_fcurves, \
-    array_from_fcurves_rotation, fcurves_keyframe_in_range, find_reference
-from .shared_export import find_seqs
+import sys
+
+import bpy
+
+from . import dsq_file
+from . import dts_types
+from . import util
+from . import shared_export
 
 
 def save(operator, context, filepath, select_marker=False, debug_report=False):
     print("Exporting scene to DSQ")
 
     scene = context.scene
-    dsq = DsqFile()
+    dsq = dsq_file.DsqFile()
 
     # Find all the sequences to export
-    sequences, sequence_flags = find_seqs(context.scene, select_marker)
+    sequences, sequence_flags = shared_export.find_seqs(context.scene, select_marker)
 
     # Seek to reference frame if present before reading nodes
-    reference_frame = find_reference(scene)
+    reference_frame = util.find_reference(scene)
 
     if reference_frame is not None:
         print("Note: Seeking to reference frame at", reference_frame)
@@ -43,7 +43,7 @@ def save(operator, context, filepath, select_marker=False, debug_report=False):
         if ob.type == "EMPTY" and not ob.parent:
             traverse_node(ob)
 
-    reference_frame = find_reference(context.scene)
+    reference_frame = util.find_reference(context.scene)
 
     # NodeOrder backwards compatibility
     if "NodeOrder" in bpy.data.texts:
@@ -83,20 +83,20 @@ def save(operator, context, filepath, select_marker=False, debug_report=False):
         print("Exporting sequence", name)
 
         if "start" not in markers:
-            return fail(operator,
+            return util.fail(operator,
                         "Missing start marker for sequence '{}'".format(name))
 
         if "end" not in markers:
-            return fail(operator,
+            return util.fail(operator,
                         "Missing end marker for sequence '{}'".format(name))
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
         frame_range = frame_end - frame_start + 1
 
-        seq = Sequence()
+        seq = dts_types.Sequence()
         seq.name = name
-        seq.flags = Sequence.AlignedScale
+        seq.flags = dts_types.Sequence.AlignedScale
         seq.priority = 1
 
         seq.toolBegin = frame_start
@@ -111,9 +111,9 @@ def save(operator, context, filepath, select_marker=False, debug_report=False):
                 if flag == "priority":
                     seq.priority = int(data)
                 elif flag == "cyclic":
-                    seq.flags |= Sequence.Cyclic
+                    seq.flags |= dts_types.Sequence.Cyclic
                 elif flag == "blend":
-                    seq.flags |= Sequence.Blend
+                    seq.flags |= dts_types.Sequence.Blend
                 elif flag == "duration":
                     seq.duration = float(data)
                 else:
@@ -158,20 +158,20 @@ def save(operator, context, filepath, select_marker=False, debug_report=False):
 
             fcurves = ob.animation_data.action.fcurves
 
-            curves_rotation = array_from_fcurves_rotation(fcurves, ob)
-            curves_translation = array_from_fcurves(fcurves, "location", 3)
-            curves_scale = array_from_fcurves(fcurves, "scale", 3)
+            curves_rotation = util.array_from_fcurves_rotation(fcurves, ob)
+            curves_translation = util.array_from_fcurves(fcurves, "location", 3)
+            curves_scale = util.array_from_fcurves(fcurves, "scale", 3)
 
             # Decide what matters by presence of f-curves
-            if curves_rotation and fcurves_keyframe_in_range(
+            if curves_rotation and util.fcurves_keyframe_in_range(
                     curves_rotation, frame_start, frame_end):
                 seq.rotationMatters[index] = True
 
-            if curves_translation and fcurves_keyframe_in_range(
+            if curves_translation and util.fcurves_keyframe_in_range(
                     curves_translation, frame_start, frame_end):
                 seq.translationMatters[index] = True
 
-            if curves_scale and fcurves_keyframe_in_range(
+            if curves_scale and util.fcurves_keyframe_in_range(
                     curves_scale, frame_start, frame_end):
                 seq.scaleMatters[index] = True
 
@@ -181,12 +181,12 @@ def save(operator, context, filepath, select_marker=False, debug_report=False):
                 translation, rotation, scale = animation_data[frame][ob]
 
                 if seq.translationMatters[index]:
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         translation -= base_translation
                     dsq.translations.append(translation)
 
                 if seq.rotationMatters[index]:
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         rotation = base_rotation.inverted() * rotation
                     dsq.rotations.append(rotation)
 

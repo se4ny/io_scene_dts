@@ -1,42 +1,68 @@
-import bpy
+"""  """
+
+import itertools
+import mathutils
 import os
+import warnings
+
+import bpy
+from bpy_extras import io_utils
 from bpy_extras.io_utils import unpack_list
 
-from .DtsShape import DtsShape
-from .DtsTypes import *
-from .write_report import write_debug_report
-from .util import default_materials, resolve_texture, get_rgb_colors, fail, \
-    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, evaluate_all
 
-import operator
-from itertools import zip_longest, count
-from functools import reduce
-from random import random
+from . import dts_shape
+from . import dts_types
+from . import util
+from . import write_report
 
 
 def grouper(iterable, n, fillvalue=None):
+    """  
+    
+    :param iterable:
+    :param n:
+    :param fillvalue:
+
+    :meta public:
+    """
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
+    return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 
 def dedup_name(group, name):
+    """  
+    
+    :param group:
+    :param name:
+
+    :meta public:
+    """
     if name not in group:
         return name
 
-    for suffix in count(2):
+    for suffix in itertools.count(2):
         new_name = name + "#" + str(suffix)
 
         if new_name not in group:
             return new_name
 
 
-def import_material(color_source, dmat, filepath):
+@warnings.deprecated
+def import_material(color_source, dmat: dts_types.Material, filepath: str) -> bpy.types.Material:
+    """ TODO
+    
+    :param color_source:
+    :param dmat:
+    :param filepath:
+
+    :meta public:
+    """
     bmat = bpy.data.materials.new(dedup_name(bpy.data.materials, dmat.name))
     bmat.diffuse_intensity = 1
 
-    texname = resolve_texture(filepath, dmat.name)
+    texname = util.resolve_texture(filepath, dmat.name)
 
     if texname is not None:
         try:
@@ -63,28 +89,28 @@ def import_material(color_source, dmat, filepath):
                     break
             else:
                 bmat.diffuse_color = color[:3]
-    elif dmat.name.lower() in default_materials:
-        bmat.diffuse_color = default_materials[dmat.name.lower()]
+    elif dmat.name.lower() in util.default_materials:
+        bmat.diffuse_color = util.default_materials[dmat.name.lower()]
     else:  # give it a random color
         bmat.diffuse_color = color_source.__next__()
 
-    if dmat.flags & Material.SelfIlluminating:
+    if dmat.flags & dts_types.Material.SelfIlluminating:
         bmat.use_shadeless = True
-    if dmat.flags & Material.Translucent:
+    if dmat.flags & dts_types.Material.Translucent:
         bmat.use_transparency = True
 
-    if dmat.flags & Material.Additive:
+    if dmat.flags & dts_types.Material.Additive:
         bmat.torque_props.blend_mode = "ADDITIVE"
-    elif dmat.flags & Material.Subtractive:
+    elif dmat.flags & dts_types.Material.Subtractive:
         bmat.torque_props.blend_mode = "SUBTRACTIVE"
     else:
         bmat.torque_props.blend_mode = "NONE"
 
-    if dmat.flags & Material.SWrap:
+    if dmat.flags & dts_types.Material.SWrap:
         bmat.torque_props.s_wrap = True
-    if dmat.flags & Material.TWrap:
+    if dmat.flags & dts_types.Material.TWrap:
         bmat.torque_props.t_wraps = True
-    if dmat.flags & Material.IFLMaterial:
+    if dmat.flags & dts_types.Material.IFLMaterial:
         bmat.torque_props.use_ifl = True
 
     # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
@@ -99,7 +125,15 @@ class index_pass:
         return item
 
 
-def create_bmesh(dmesh, materials, shape):
+def create_bmesh(dmesh: dts_types.Mesh, materials: dts_types.Material, shape: dts_shape.Shape) -> bpy.types.Mesh:
+    """ TODO
+    
+    :param dmesh:
+    :param materials:
+    :param shape:
+
+    :meta public:
+    """
     me = bpy.data.meshes.new("Mesh")
 
     faces = []
@@ -108,21 +142,21 @@ def create_bmesh(dmesh, materials, shape):
     indices_pass = index_pass()
 
     for prim in dmesh.primitives:
-        if prim.type & Primitive.Indexed:
+        if prim.type & dts_types.Primitive.Indexed:
             indices = dmesh.indices
         else:
             indices = indices_pass
 
-        dmat = None
+        dmat: None | dts_types.Material = None
 
-        if not (prim.type & Primitive.NoMaterial):
-            dmat = shape.materials[prim.type & Primitive.MaterialMask]
+        if not (prim.type & dts_types.Primitive.NoMaterial):
+            dmat = shape.materials[prim.type & dts_types.Primitive.MaterialMask]
 
             if dmat not in material_indices:
                 material_indices[dmat] = len(me.materials)
                 me.materials.append(materials[dmat])
 
-        if prim.type & Primitive.Strip:
+        if prim.type & dts_types.Primitive.Strip:
             even = True
             for i in range(prim.firstElement + 2,
                            prim.firstElement + prim.numElements):
@@ -133,7 +167,7 @@ def create_bmesh(dmesh, materials, shape):
                     faces.append(
                         ((indices[i - 2], indices[i - 1], indices[i]), dmat))
                 even = not even
-        elif prim.type & Primitive.Fan:
+        elif prim.type & dts_types.Primitive.Fan:
             even = True
             for i in range(prim.firstElement + 2,
                            prim.firstElement + prim.numElements):
@@ -179,30 +213,43 @@ def create_bmesh(dmesh, materials, shape):
     return me
 
 
-def file_base_name(filepath):
+def file_base_name(filepath: str) -> str:
+    """  
+    
+    :param filepath:
+
+    :meta public:
+    """
     return os.path.basename(filepath).rsplit(".", 1)[0]
 
 
-def insert_reference(frame, shape_nodes):
+def insert_reference(frame, shape_nodes: list[bpy.types.Object]):
+    """  
+    
+    :param frame:
+    :param shape_nodes:
+
+    :meta public:
+    """
     for node in shape_nodes:
         ob = node.bl_ob
 
-        curves = ob_location_curves(ob)
+        curves = util.ob_location_curves(ob)
         for curve in curves:
             curve.keyframe_points.add(1)
             key = curve.keyframe_points[-1]
             key.interpolation = "LINEAR"
             key.co = (frame, ob.location[curve.array_index])
 
-        curves = ob_scale_curves(ob)
+        curves = util.ob_scale_curves(ob)
         for curve in curves:
             curve.keyframe_points.add(1)
             key = curve.keyframe_points[-1]
             key.interpolation = "LINEAR"
             key.co = (frame, ob.scale[curve.array_index])
 
-        _, curves = ob_rotation_curves(ob)
-        rot = ob_rotation_data(ob)
+        _, curves = util.ob_rotation_curves(ob)
+        rot = util.ob_rotation_data(ob)
         for curve in curves:
             curve.keyframe_points.add(1)
             key = curve.keyframe_points[-1]
@@ -210,26 +257,40 @@ def insert_reference(frame, shape_nodes):
             key.co = (frame, rot[curve.array_index])
 
 
-def load(operator,
-         context,
-         filepath,
-         reference_keyframe=True,
-         import_sequences=True,
-         use_armature=False,
-         debug_report=False):
-    shape = DtsShape()
+def load(operator: bpy.types.Operator,
+         context: bpy.types.Context,
+         filepath: str,
+         reference_keyframe: bool=True,
+         import_sequences: bool=True,
+         use_armature: bool=False,
+         debug_report: bool=False) -> None:
+    """  
+    
+    :param operator:
+    :param context:
+    :param filepath:
+    :param reference_keyframe:
+    :param import_sequences:
+    :param use_armature:
+    :param debug_report:
+
+    :meta public:
+    """
+    shape = dts_shape.Shape()
 
     with open(filepath, "rb") as fd:
         shape.load(fd)
 
     if debug_report:
-        write_debug_report(filepath + ".txt", shape)
+        write_report.write_debug_report(filepath + ".txt", shape)
         with open(filepath + ".pass.dts", "wb") as fd:
             shape.save(fd)
 
     # Create a Blender material for each DTS material
     materials = {}
-    color_source = get_rgb_colors()
+
+    # BUG: Blender requires alpha as well.
+    color_source = util.get_rgb_colors()
 
     for dmat in shape.materials:
         materials[dmat] = import_material(color_source, dmat, filepath)
@@ -260,7 +321,7 @@ def load(operator,
         # Calculate armature-space matrix, head and tail for each node
         for i, node in enumerate(shape.nodes):
             node.mat = shape.default_rotations[i].to_matrix()
-            node.mat = Matrix.Translation(
+            node.mat = mathutils.Matrix.Translation(
                 shape.default_translations[i]) * node.mat.to_4x4()
             if node.parent != -1:
                 node.mat = shape.nodes[node.parent].mat * node.mat
@@ -310,8 +371,8 @@ def load(operator,
                 dedup_name(bpy.data.objects, shape.names[node.name]), None)
             node.bl_ob = ob
             ob["nodeIndex"] = i
-            ob.empty_draw_type = "SINGLE_ARROW"
-            ob.empty_draw_size = 0.5
+            ob.empty_display_type = "SINGLE_ARROW"
+            ob.empty_display_size = 0.5
 
             if node.parent != -1:
                 ob.parent = node_obs[node.parent]
@@ -345,10 +406,10 @@ def load(operator,
             flags = []
             flags.append("priority {}".format(seq.priority))
 
-            if seq.flags & Sequence.Cyclic:
+            if seq.flags & dts_types.Sequence.Cyclic:
                 flags.append("cyclic")
 
-            if seq.flags & Sequence.Blend:
+            if seq.flags & dts_types.Sequence.Blend:
                 flags.append("blend")
 
             flags.append("duration {}".format(seq.duration))
@@ -375,20 +436,20 @@ def load(operator,
 
             for mattersIndex, node in enumerate(nodesTranslation):
                 ob = node_obs_val[node]
-                curves = ob_location_curves(ob)
+                curves = util.ob_location_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     vec = shape.node_translations[seq.baseTranslation +
                                                   mattersIndex *
                                                   seq.numKeyframes +
                                                   frameIndex]
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         if reference_frame is None:
-                            return fail(
+                            return util.fail(
                                 operator,
                                 "Missing 'reference' marker for blend animation '{}'"
                                 .format(name))
-                        ref_vec = Vector(evaluate_all(curves, reference_frame))
+                        ref_vec = mathutils.Vector(util.evaluate_all(curves, reference_frame))
                         vec = ref_vec + vec
 
                     for curve in curves:
@@ -400,20 +461,20 @@ def load(operator,
 
             for mattersIndex, node in enumerate(nodesRotation):
                 ob = node_obs_val[node]
-                mode, curves = ob_rotation_curves(ob)
+                mode, curves = util.ob_rotation_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     rot = shape.node_rotations[seq.baseRotation +
                                                mattersIndex * seq.numKeyframes
                                                + frameIndex]
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         if reference_frame is None:
-                            return fail(
+                            return util.fail(
                                 operator,
                                 "Missing 'reference' marker for blend animation '{}'"
                                 .format(name))
-                        ref_rot = Quaternion(
-                            evaluate_all(curves, reference_frame))
+                        ref_rot = mathutils.Quaternion(
+                            util.evaluate_all(curves, reference_frame))
                         rot = ref_rot * rot
                     if mode == 'AXIS_ANGLE':
                         rot = rot.to_axis_angle()
@@ -429,7 +490,7 @@ def load(operator,
 
             for mattersIndex, node in enumerate(nodesScale):
                 ob = node_obs_val[node]
-                curves = ob_scale_curves(ob)
+                curves = util.ob_scale_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
@@ -438,12 +499,12 @@ def load(operator,
                                                   seq.numKeyframes +
                                                   frameIndex]
 
-                    if seq.flags & Sequence.UniformScale:
+                    if seq.flags & dts_types.Sequence.UniformScale:
                         s = shape.node_uniform_scales[index]
                         vec = (s, s, s)
-                    elif seq.flags & Sequence.AlignedScale:
+                    elif seq.flags & dts_types.Sequence.AlignedScale:
                         vec = shape.node_aligned_scales[index]
-                    elif seq.flags & Sequence.ArbitraryScale:
+                    elif seq.flags & dts_types.Sequence.ArbitraryScale:
                         print(
                             "Warning: Arbitrary scale animation not implemented"
                         )
@@ -486,10 +547,10 @@ def load(operator,
             mesh = shape.meshes[obj.firstMesh + meshIndex]
             mtype = mesh.type
 
-            if mtype == Mesh.NullType:
+            if mtype == dts_types.Mesh.NullType:
                 continue
 
-            if mtype != Mesh.StandardType and mtype != Mesh.SkinType:
+            if mtype != dts_types.Mesh.StandardType and mtype != dts_types.Mesh.SkinType:
                 print(
                     'Warning: Mesh #{} of object {} is of unsupported type {}, ignoring'
                     .format(meshIndex + 1, mtype, shape.names[obj.name]))
@@ -508,7 +569,7 @@ def load(operator,
                 bobj.parent_type = "BONE"
                 bobj.matrix_world = shape.nodes[obj.node].mat
 
-                if mtype == Mesh.SkinType:
+                if mtype == dts_types.Mesh.SkinType:
                     modifier = bobj.modifiers.new('Armature', 'ARMATURE')
                     modifier.object = root_ob
             else:
@@ -516,10 +577,10 @@ def load(operator,
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
-            if lod_name not in bpy.data.groups:
-                bpy.data.groups.new(lod_name)
+            if lod_name not in bpy.data.collections:
+                bpy.data.collections.new(lod_name)
 
-            bpy.data.groups[lod_name].objects.link(bobj)
+            bpy.data.collections[lod_name].objects.link(bobj)
 
     # Import a bounds mesh
     me = bpy.data.meshes.new("Mesh")
@@ -549,8 +610,16 @@ def load(operator,
     return {"FINISHED"}
 
 
-def add_vertex_groups(mesh, ob, shape):
-    for node, initial_transform in mesh.bones:
+def add_vertex_groups(mesh: dts_types.Mesh, ob: bpy.types.Object, shape: dts_shape.Shape) -> None:
+    """ 
+    
+    :param mesh:
+    :param ob:
+    :param shape:
+
+    :meta public:
+    """
+    for node, _ in mesh.bones:
         # TODO: Handle initial_transform
         ob.vertex_groups.new(shape.names[shape.nodes[node].name])
 

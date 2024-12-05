@@ -1,41 +1,40 @@
+"""  """
 # vim: tabstop=8 noexpandtab
 
-from collections import namedtuple
-from struct import pack, unpack
-from enum import Enum
-
+import dataclasses
 import math
-from mathutils import Euler, Matrix, Quaternion, Vector
+import mathutils
+import struct
+import typing
 
 
-def bit(n):
+def bit(n: int) -> int:
     return 1 << n
 
 
-class Box:
-
-    def __init__(self, min, max):
-        self.min = min
-        self.max = max
+@dataclasses.dataclass
+class Box(object):
+    min: mathutils.Vector
+    max: mathutils.Vector
 
     def __repr__(self):
         return "({}, {})".format(self.min, self.max)
 
 
-class Node:
-
-    def __init__(self, name, parent=-1):
-        self.name = name
-        self.parent = parent
+class Node(object):
+    
+    __slots__ = ('name', 'parent', 'firstObject', 'firstChild', 'nextSibling')
+    def __init__(self, name: str, parent: int=-1) -> None:
+        self.name: str = name
+        self.parent: int = parent
 
         # Unused
-        self.firstObject = -1
-        self.firstChild = -1
-        self.nextSibling = -1
+        self.firstObject: int = -1
+        self.firstChild: int = -1
+        self.nextSibling: int = -1
 
     def write(self, stream):
-        stream.write32(self.name, self.parent, self.firstObject,
-                       self.firstChild, self.nextSibling)
+        stream.write32(self.name, self.parent, self.firstObject, self.firstChild, self.nextSibling)
 
     @classmethod
     def read(cls, stream):
@@ -46,26 +45,24 @@ class Node:
         return obj
 
 
-class Object:
+class Object(object):
 
-    def __init__(self, name, numMeshes, firstMesh, node):
-        self.name = name
-        self.numMeshes = numMeshes
-        self.firstMesh = firstMesh
-        self.node = node
+    def __init__(self, name: str, numMeshes: int, firstMesh: int, node: Node) -> None:
+        self.name: str = name
+        self.numMeshes: int = numMeshes
+        self.firstMesh: int = firstMesh
+        self.node: Node = node
 
         # Unused
-        self.nextSibling = -1
-        self.firstDecal = -1
+        self.nextSibling: int = -1
+        self.firstDecal: int = -1
 
     def write(self, stream):
-        stream.write32(self.name, self.numMeshes, self.firstMesh, self.node,
-                       self.nextSibling, self.firstDecal)
+        stream.write32(self.name, self.numMeshes, self.firstMesh, self.node, self.nextSibling, self.firstDecal)
 
     @classmethod
-    def read(cls, stream):
-        obj = cls(stream.read32(), stream.read32(), stream.read32(),
-                  stream.read32())
+    def read(cls, stream) -> typing.Self:
+        obj = cls(stream.read32(), stream.read32(), stream.read32(), stream.read32())
         obj.nextSibling = stream.read32()
         obj.firstDecal = stream.read32()
         return obj
@@ -83,8 +80,7 @@ class IflMaterial:
         self.numFrames = -1
 
     def write(self, stream):
-        stream.write32(self.name, self.slot, self.firstFrame, self.time,
-                       self.numFrames)
+        stream.write32(self.name, self.slot, self.firstFrame, self.time, self.numFrames)
 
     @classmethod
     def read(cls, stream):
@@ -95,16 +91,25 @@ class IflMaterial:
         return instance
 
 
-class Subshape:
+class Decal(object):
+    """  """
 
-    def __init__(self, firstNode, firstObject, firstDecal, numNodes,
-                 numObjects, numDecals):
-        self.firstNode = firstNode
-        self.firstObject = firstObject
-        self.firstDecal = firstDecal
-        self.numNodes = numNodes
-        self.numObjects = numObjects
-        self.numDecals = numDecals
+    def write(self, stream):
+        pass
+
+    @classmethod
+    def read(cls, stream):
+        pass
+
+
+@dataclasses.dataclass
+class Subshape(object):
+    firstNode: int
+    firstObject: int
+    firstDecal: int
+    numNodes: int
+    numObjects: int
+    numDecals: int
 
 
 class ObjectState:
@@ -214,8 +219,8 @@ class Mesh:
     UseEncodedNormals = bit(28)
 
     def __init__(self, mtype):
-        self.bounds = Box(Vector(), Vector())
-        self.center = Vector()
+        self.bounds = Box(mathutils.Vector(), mathutils.Vector())
+        self.center = mathutils.Vector()
         self.radius = 0
         self.numFrames = 1
         self.numMatFrames = 1
@@ -246,8 +251,8 @@ class Mesh:
         return map(lambda vert: mat * vert, self.verts)
 
     def calculate_bounds_mat(self, mat):
-        box = Box(Vector((10e30, 10e30, 10e30)),
-                  Vector((-10e30, -10e30, -10e30)))
+        box = Box(mathutils.Vector((10e30, 10e30, 10e30)),
+                  mathutils.Vector((-10e30, -10e30, -10e30)))
 
         for vert in self.transformed_verts(mat):
             box.min.x = min(box.min.x, vert.x)
@@ -272,7 +277,7 @@ class Mesh:
 
         for vert in self.transformed_verts(mat):
             delta = vert - center
-            radius = max(radius, Vector((delta.x, delta.y)).length)
+            radius = max(radius, mathutils.Vector((delta.x, delta.y)).length)
 
         return radius
 
@@ -463,8 +468,8 @@ class Material:
 
 
 def read_bit_set(fd):
-    dummy, numWords = unpack("<ii", fd.read(8))
-    words = unpack(str(numWords) + "i", fd.read(4 * numWords))
+    dummy, numWords = struct.unpack("<ii", fd.read(8))
+    words = struct.unpack(str(numWords) + "i", fd.read(4 * numWords))
     total = len(words) * 32
     return [(words[i >> 5] & (1 << (i & 31))) != 0 for i in range(total)]
 
@@ -477,10 +482,10 @@ def write_bit_set(fd, bits):
         if bit:
             words[i >> 5] |= 1 << (i & 31)
 
-    fd.write(pack("<ii", numWords, numWords))
+    fd.write(struct.pack("<ii", numWords, numWords))
 
     for word in words:
-        fd.write(pack("<i", word))
+        fd.write(struct.pack("<i", word))
 
 
 class Sequence:
@@ -523,21 +528,21 @@ class Sequence:
 
     def write(self, fd, writeIndex=True):
         if writeIndex:
-            fd.write(pack("<i", self.nameIndex))
-        fd.write(pack("<I", self.flags))
-        fd.write(pack("<i", self.numKeyframes))
-        fd.write(pack("<f", self.duration))
-        fd.write(pack("<i", self.priority))
-        fd.write(pack("<i", self.firstGroundFrame))
-        fd.write(pack("<i", self.numGroundFrames))
-        fd.write(pack("<i", self.baseRotation))
-        fd.write(pack("<i", self.baseTranslation))
-        fd.write(pack("<i", self.baseScale))
-        fd.write(pack("<i", self.baseObjectState))
-        fd.write(pack("<i", self.baseDecalState))
-        fd.write(pack("<i", self.firstTrigger))
-        fd.write(pack("<i", self.numTriggers))
-        fd.write(pack("<f", self.toolBegin))
+            fd.write(struct.pack("<i", self.nameIndex))
+        fd.write(struct.pack("<I", self.flags))
+        fd.write(struct.pack("<i", self.numKeyframes))
+        fd.write(struct.pack("<f", self.duration))
+        fd.write(struct.pack("<i", self.priority))
+        fd.write(struct.pack("<i", self.firstGroundFrame))
+        fd.write(struct.pack("<i", self.numGroundFrames))
+        fd.write(struct.pack("<i", self.baseRotation))
+        fd.write(struct.pack("<i", self.baseTranslation))
+        fd.write(struct.pack("<i", self.baseScale))
+        fd.write(struct.pack("<i", self.baseObjectState))
+        fd.write(struct.pack("<i", self.baseDecalState))
+        fd.write(struct.pack("<i", self.firstTrigger))
+        fd.write(struct.pack("<i", self.numTriggers))
+        fd.write(struct.pack("<f", self.toolBegin))
 
         write_bit_set(fd, self.rotationMatters)
         write_bit_set(fd, self.translationMatters)
@@ -550,30 +555,30 @@ class Sequence:
 
     @classmethod
     def read_bit_set(cls, fd):
-        dummy = unpack("i", fd.read(4))[0]
-        numWords = unpack("i", fd.read(4))[0]
-        return unpack(str(numWords) + "i", fd.read(4 * numWords))
+        dummy = struct.unpack("i", fd.read(4))[0]
+        numWords = struct.unpack("i", fd.read(4))[0]
+        return struct.unpack(str(numWords) + "i", fd.read(4 * numWords))
 
     @classmethod
     def read(cls, fd, readIndex=True):
         seq = cls()
 
         if readIndex:
-            seq.nameIndex = unpack("i", fd.read(4))[0]
-        seq.flags = unpack("I", fd.read(4))[0]
-        seq.numKeyframes = unpack("i", fd.read(4))[0]
-        seq.duration = unpack("f", fd.read(4))[0]
-        seq.priority = unpack("i", fd.read(4))[0]
-        seq.firstGroundFrame = unpack("i", fd.read(4))[0]
-        seq.numGroundFrames = unpack("i", fd.read(4))[0]
-        seq.baseRotation = unpack("i", fd.read(4))[0]
-        seq.baseTranslation = unpack("i", fd.read(4))[0]
-        seq.baseScale = unpack("i", fd.read(4))[0]
-        seq.baseObjectState = unpack("i", fd.read(4))[0]
-        seq.baseDecalState = unpack("i", fd.read(4))[0]
-        seq.firstTrigger = unpack("i", fd.read(4))[0]
-        seq.numTriggers = unpack("i", fd.read(4))[0]
-        seq.toolBegin = unpack("f", fd.read(4))[0]
+            seq.nameIndex = struct.unpack("i", fd.read(4))[0]
+        seq.flags = struct.unpack("I", fd.read(4))[0]
+        seq.numKeyframes = struct.unpack("i", fd.read(4))[0]
+        seq.duration = struct.unpack("f", fd.read(4))[0]
+        seq.priority = struct.unpack("i", fd.read(4))[0]
+        seq.firstGroundFrame = struct.unpack("i", fd.read(4))[0]
+        seq.numGroundFrames = struct.unpack("i", fd.read(4))[0]
+        seq.baseRotation = struct.unpack("i", fd.read(4))[0]
+        seq.baseTranslation = struct.unpack("i", fd.read(4))[0]
+        seq.baseScale = struct.unpack("i", fd.read(4))[0]
+        seq.baseObjectState = struct.unpack("i", fd.read(4))[0]
+        seq.baseDecalState = struct.unpack("i", fd.read(4))[0]
+        seq.firstTrigger = struct.unpack("i", fd.read(4))[0]
+        seq.numTriggers = struct.unpack("i", fd.read(4))[0]
+        seq.toolBegin = struct.unpack("f", fd.read(4))[0]
 
         seq.rotationMatters = read_bit_set(fd)
         seq.translationMatters = read_bit_set(fd)

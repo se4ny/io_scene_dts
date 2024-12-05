@@ -1,10 +1,13 @@
-import bpy
-from math import ceil
+"""  """
 
-from .DsqFile import DsqFile
-from .DtsTypes import Sequence, Quaternion, Vector
-from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, \
-  evaluate_all, find_reference
+import math
+import mathutils
+
+import bpy
+
+from . import dsq_file
+from . import dts_types
+from . import util
 
 
 def get_free_name(name, taken):
@@ -22,14 +25,8 @@ def get_free_name(name, taken):
         suffix += 1
 
 
-# action.fcurves.new(data_path, array_index)
-# action.fcurves[].keyframe_points.add(number)
-# action.fcurves[].keyframe_points[].interpolation = "LINEAR"
-# action.fcurves[].keyframe_points[].co
-
-
 def load(operator, context, filepath, debug_report=False):
-    dsq = DsqFile()
+    dsq = dsq_file.DsqFile()
 
     with open(filepath, "rb") as fd:
         dsq.read(fd)
@@ -69,7 +66,7 @@ def load(operator, context, filepath, debug_report=False):
             node_missing.append(name)
 
     if node_missing:
-        return fail(
+        return util.fail(
             operator,
             "The following nodes from the DSQ file could not be found in your scene:\n"
             + ", ".join(node_missing))
@@ -80,7 +77,7 @@ def load(operator, context, filepath, debug_report=False):
     scene_sequences = set()
 
     for marker in context.scene.timeline_markers:
-        last_frame = max(last_frame, int(ceil(marker.frame + 10)))
+        last_frame = max(last_frame, int(math.ceil(marker.frame + 10)))
 
         if ":" not in marker.name:
             continue
@@ -89,7 +86,7 @@ def load(operator, context, filepath, debug_report=False):
         scene_sequences.add(name)
 
     for action in bpy.data.actions:
-        last_frame = max(last_frame, int(ceil(action.frame_range[1] + 10)))
+        last_frame = max(last_frame, int(math.ceil(action.frame_range[1] + 10)))
 
     if "Sequences" in bpy.data.texts:
         for line in bpy.data.texts["Sequences"].as_string().split("\n"):
@@ -102,7 +99,7 @@ def load(operator, context, filepath, debug_report=False):
             scene_sequences.add(name)
 
     sequences_text = []
-    reference_frame = find_reference(context.scene)
+    reference_frame = util.find_reference(context.scene)
 
     # Create Blender keyframes and markers for each sequence
     for seq in dsq.sequences:
@@ -112,10 +109,10 @@ def load(operator, context, filepath, debug_report=False):
         flags = []
         flags.append("priority {}".format(seq.priority))
 
-        if seq.flags & Sequence.Cyclic:
+        if seq.flags & dts_types.Sequence.Cyclic:
             flags.append("cyclic")
 
-        if seq.flags & Sequence.Blend:
+        if seq.flags & dts_types.Sequence.Blend:
             flags.append("blend")
 
         flags.append("duration {}".format(seq.duration))
@@ -136,19 +133,19 @@ def load(operator, context, filepath, debug_report=False):
         step = 1
 
         for mattersIndex, ob in enumerate(nodesTranslation):
-            curves = ob_location_curves(ob)
+            curves = util.ob_location_curves(ob)
 
             for frameIndex in range(seq.numKeyframes):
                 vec = dsq.translations[seq.baseTranslation +
                                        mattersIndex * seq.numKeyframes +
                                        frameIndex]
-                if seq.flags & Sequence.Blend:
+                if seq.flags & dts_types.Sequence.Blend:
                     if reference_frame is None:
-                        return fail(
+                        return util.fail(
                             operator,
                             "Missing 'reference' marker for blend animation '{}'"
                             .format(name))
-                    ref_vec = Vector(evaluate_all(curves, reference_frame))
+                    ref_vec = mathutils.Vector(util.evaluate_all(curves, reference_frame))
                     vec = ref_vec + vec
 
                 for curve in curves:
@@ -159,19 +156,19 @@ def load(operator, context, filepath, debug_report=False):
                               vec[curve.array_index])
 
         for mattersIndex, ob in enumerate(nodesRotation):
-            mode, curves = ob_rotation_curves(ob)
+            mode, curves = util.ob_rotation_curves(ob)
 
             for frameIndex in range(seq.numKeyframes):
                 rot = dsq.rotations[seq.baseRotation +
                                     mattersIndex * seq.numKeyframes +
                                     frameIndex]
-                if seq.flags & Sequence.Blend:
+                if seq.flags & dts_types.Sequence.Blend:
                     if reference_frame is None:
-                        return fail(
+                        return util.fail(
                             operator,
                             "Missing 'reference' marker for blend animation '{}'"
                             .format(name))
-                    ref_rot = Quaternion(evaluate_all(curves, reference_frame))
+                    ref_rot = mathutils.Quaternion(util.evaluate_all(curves, reference_frame))
                     rot = ref_rot * rot
                 if mode == 'AXIS_ANGLE':
                     rot = rot.to_axis_angle()
@@ -186,17 +183,17 @@ def load(operator, context, filepath, debug_report=False):
                               rot[curve.array_index])
 
         for mattersIndex, ob in enumerate(nodesScale):
-            curves = ob_scale_curves(ob)
+            curves = util.ob_scale_curves(ob)
 
             for frameIndex in range(seq.numKeyframes):
                 index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
 
-                if seq.flags & Sequence.UniformScale:
+                if seq.flags & dts_types.Sequence.UniformScale:
                     s = dsq.uniform_scales[index]
                     scale = s, s, s
-                elif seq.flags & Sequence.AlignedScale:
+                elif seq.flags & dts_types.Sequence.AlignedScale:
                     scale = dsq.aligned_scales[index]
-                elif seq.flags & Sequence.ArbitraryScale:
+                elif seq.flags & dts_types.Sequence.ArbitraryScale:
                     print("Warning: Arbitrary scale animation not implemented")
                     break
                 else:

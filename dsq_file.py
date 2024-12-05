@@ -1,22 +1,27 @@
-from .DtsTypes import Sequence, Trigger, Vector, Quaternion
-from struct import pack, unpack, calcsize
-from ctypes import c_byte, c_short, c_int
+"""  """
+
+import ctypes
+import mathutils
+import struct
+import sys
+
+from . import dts_types
 
 
 def read(fd, fmt):
-    return unpack(fmt, fd.read(calcsize(fmt)))
+    return struct.unpack(fmt, fd.read(struct.calcsize(fmt)))
 
 
 def write(fd, fmt, *values):
-    fd.write(pack(fmt, *values))
+    fd.write(struct.pack(fmt, *values))
 
 
 def write_quat(fd, q):
     write(fd, "4h",
-          c_short(int(q.x * 32767)).value,
-          c_short(int(q.y * 32767)).value,
-          c_short(int(q.z * 32767)).value,
-          c_short(int(q.w * -32767)).value)
+          ctypes.c_short(int(q.x * 32767)).value,
+          ctypes.c_short(int(q.y * 32767)).value,
+          ctypes.c_short(int(q.z * 32767)).value,
+          ctypes.c_short(int(q.w * -32767)).value)
 
 
 def write_vec(fd, v):
@@ -25,11 +30,11 @@ def write_vec(fd, v):
 
 def read_quat(fd):
     x, y, z, w = read(fd, "4h")
-    return Quaternion((w / -32767, x / 32767, y / 32767, z / 32767))
+    return mathutils.Quaternion((w / -32767, x / 32767, y / 32767, z / 32767))
 
 
 def read_vec(fd):
-    return Vector(read(fd, "3f"))
+    return mathutils.Vector(read(fd, "3f"))
 
 
 class DsqFile:
@@ -157,7 +162,7 @@ class DsqFile:
         old_shape_num_objects = read(fd, "<i")
 
         if version < 17:
-            assert false, "TODO: read keyframes from version < 17"
+            assert False, "TODO: read keyframes from version < 17"
 
         if version > 21:
             self.rotations = [read_quat(fd) for i in range(read(fd, "<i")[0])]
@@ -192,7 +197,7 @@ class DsqFile:
         self.sequences = [None] * num_seqs
         for i in range(num_seqs):
             name = self.read_name(fd)
-            self.sequences[i] = Sequence.read(fd, False)
+            self.sequences[i] = dts_types.Sequence.read(fd, False)
             self.sequences[i].name = name
 
         # and finally, triggers
@@ -200,6 +205,6 @@ class DsqFile:
             (num_sjws, ) = read(fd, "<i")
             self.triggers = [None] * num_sjws
             for i in range(num_sjws):
-                self.triggers[i] = Trigger(0, 0)
+                self.triggers[i] = dts_types.Trigger(0, 0)
                 self.triggers[i].state = read(fd, "<i")
                 self.triggers[i].pos = read(fd, "<f")

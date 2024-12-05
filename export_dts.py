@@ -1,26 +1,43 @@
-import bpy, bmesh, os, sys
-from math import sqrt, pi
-from operator import attrgetter
-from itertools import groupby
+"""  """
 
-from .DtsShape import DtsShape
-from .DtsTypes import *
-from .write_report import write_debug_report
-from .util import fail, resolve_texture, default_materials, evaluate_all, find_reference, \
-    array_from_fcurves, array_from_fcurves_rotation, fcurves_keyframe_in_range
-from .shared_export import find_seqs
-
+import itertools
+import math
+import mathutils
+import operator as operatemod
+import os
 import re
+import sys
+
+import bpy
+import bmesh
+
+from . import dts_shape
+from . import dts_types
+from . import dts_utils
+from . import write_report
+from . import util
+from . import shared_export
+
 # re really isn't necessary. oh well.
 re_lod_size = re.compile(r"(-?\d+)$")
 common_col_name = re.compile(r"^(LOS)?[cC]ol-?\d+$")
 
 
-def undup_name(n):
+def undup_name(n: str) -> str:
+    """  
+    
+    :param n:
+    :return:
+    """
     return n.split("#", 1)[0]
 
 
-def linearrgb_to_srgb(c):
+def linearrgb_to_srgb(c: float) -> float:
+    """  
+    
+    :param c:
+    :return:
+    """
     if c < 0.0031308:
         if c < 0:
             return 0
@@ -30,7 +47,13 @@ def linearrgb_to_srgb(c):
         return 1.055 * (c**(1.0 / 2.4)) - 0.055
 
 
-def get_vertex_bone(mesh, node):
+def get_vertex_bone(mesh: dts_types.Mesh, node: dts_types.Node) -> int:
+    """  
+    
+    :param mesh:
+    :param node:
+    :return:
+    """
     for bone_index, (node_index, _) in enumerate(mesh.bones):
         if node_index == node.index:
             return bone_index
@@ -81,36 +104,36 @@ def export_material(mat, shape):
     flags = 0
 
     if mat.use_shadeless:
-        flags |= Material.SelfIlluminating
+        flags |= dts_types.Material.SelfIlluminating
     if mat.use_transparency:
-        flags |= Material.Translucent
+        flags |= dts_types.Material.Translucent
     if mat.torque_props.blend_mode == "ADDITIVE":
-        flags |= Material.Additive
+        flags |= dts_types.Material.Additive
     elif mat.torque_props.blend_mode == "SUBTRACTIVE":
-        flags |= Material.Subtractive
+        flags |= dts_types.Material.Subtractive
 
     if mat.torque_props.s_wrap:
-        flags |= Material.SWrap
+        flags |= dts_types.Material.SWrap
     if mat.torque_props.t_wrap:
-        flags |= Material.TWrap
-    flags |= Material.NeverEnvMap
+        flags |= dts_types.Material.TWrap
+    flags |= dts_types.Material.NeverEnvMap
     if mat.torque_props.no_mipmaps:
-        flags |= Material.NoMipMap
+        flags |= dts_types.Material.NoMipMap
     if mat.torque_props.mip_bzero:
-        flags |= Material.MipMapZeroBorder
+        flags |= dts_types.Material.MipMapZeroBorder
 
     if mat.torque_props.use_ifl:
-        flags |= Material.IFLMaterial
+        flags |= dts_types.Material.IFLMaterial
 
         # TODO: keep IFL materials in a table by name?
         # what would duplicates do?
 
         ifl_index = len(shape.iflmaterials)
-        ifl = IflMaterial(name=shape.name(mat.torque_props.ifl_name),
+        ifl = dts_types.IflMaterial(name=shape.name(mat.torque_props.ifl_name),
                           slot=material_index)
         shape.iflmaterials.append(ifl)
 
-    material = Material(name=undup_name(mat.name), flags=flags)
+    material = dts_types.Material(name=undup_name(mat.name), flags=flags)
     material.bl_mat = mat
 
     shape.materials.append(material)
@@ -132,7 +155,7 @@ def export_empty_node(lookup, shape, select_object, ob, parent=-1):
     else:
         name = undup_name(ob.name)
 
-    node = Node(shape.name(name), parent)
+    node = dts_types.Node(shape.name(name), parent)
 
     node.armature = None
     node.bl_ob = ob
@@ -148,7 +171,7 @@ def export_empty_node(lookup, shape, select_object, ob, parent=-1):
 
 def export_bones(lookup, shape, armature, bones, parent=-1):
     for bone in bones:
-        node = Node(shape.name(bone.name), parent)
+        node = dts_types.Node(shape.name(bone.name), parent)
         node.bone = bone
         node.bl_ob = bone
 
@@ -211,7 +234,7 @@ def save_nodes(scene, shape, select_object, dsq_compat):
                 .format(shape.names[node.name]))
 
         node.index = index
-        node.matrix_world = Matrix.Translation(
+        node.matrix_world = dts_types.Matrix.Translation(
             location) * rotation.to_matrix().to_4x4()
 
         if node.parent != -1:
@@ -296,7 +319,7 @@ def save_meshes(scene, shape, node_lookup, select_object):
 
                 # Compensate for matrix_local pointing to tail, offset to head
                 # Does this need to use node.matrix somehow?
-                transform_mat = Matrix.Translation(
+                transform_mat = dts_types.Matrix.Translation(
                     (0, bone.length, 0)) * transform_mat
             elif bobj.parent_type == 'OBJECT':
                 if bobj.parent not in node_lookup:
@@ -322,16 +345,16 @@ def save_meshes(scene, shape, node_lookup, select_object):
             if auto_root_index is None:
                 auto_root_index = len(shape.nodes)
 
-                node = Node(shape.name("__auto_root__"))
+                node = dts_types.Node(shape.name("__auto_root__"))
                 node.bl_ob = None
                 node.armature = None
                 node.index = auto_root_index
-                node.matrix = Matrix.Identity(4)
+                node.matrix = mathutils.Matrix.Identity(4)
                 node.matrix_world = node.matrix
 
                 shape.nodes.append(node)
-                shape.default_rotations.append(Quaternion((1, 0, 0, 0)))
-                shape.default_translations.append(Vector())
+                shape.default_rotations.append(mathutils.Quaternion((1, 0, 0, 0)))
+                shape.default_translations.append(mathutils.Vector())
 
             attach_node = auto_root_index
 
@@ -349,20 +372,20 @@ def save_meshes(scene, shape, node_lookup, select_object):
                 lod_size = 32  # setting?
 
             print("Creating LOD '{}' (size {})".format(lod_name, lod_size))
-            scene_lods[lod_name] = DetailLevel(name=lod_name_index,
+            scene_lods[lod_name] = dts_types.DetailLevel(name=lod_name_index,
                                                subshape=0,
                                                objectDetail=-1,
                                                size=lod_size)
             shape.detail_levels.append(scene_lods[lod_name])
 
         if name not in scene_objects:
-            object = Object(shape.name(name),
+            object = dts_types.Object(shape.name(name),
                             numMeshes=0,
                             firstMesh=0,
                             node=attach_node)
             object.has_transparency = False
             shape.objects.append(object)
-            shape.objectstates.append(ObjectState(
+            shape.objectstates.append(dts_types.ObjectState(
                 1.0, 0, 0))  # ff56g: search for a37hm
             scene_objects[name] = (object, {})
 
@@ -380,7 +403,7 @@ def save_meshes(scene, shape, node_lookup, select_object):
     return scene_lods, scene_objects, bounds_ob
 
 
-def compute_bounds(shape, bounds_ob):
+def compute_bounds(shape: dts_shape.Shape, bounds_ob):
     print("Computing bounds")
 
     # shape.smallest_size = None
@@ -391,10 +414,10 @@ def compute_bounds(shape, bounds_ob):
     #         shape.smallest_size = lod.size
     #         shape.smallest_detail_level = i
 
-    shape.bounds = Box(Vector((10e30, 10e30, 10e30)),
-                       Vector((-10e30, -10e30, -10e30)))
+    shape.bounds = dts_utils.Box(mathutils.Vector((10e30, 10e30, 10e30)),
+                       mathutils.Vector((-10e30, -10e30, -10e30)))
 
-    shape.center = Vector()
+    shape.center = mathutils.Vector()
 
     shape.radius = 0
     shape.radius_tube = 0
@@ -403,7 +426,7 @@ def compute_bounds(shape, bounds_ob):
         for j in range(0, obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + j]
 
-            if mesh.type == Mesh.NullType:
+            if mesh.type == dts_types.Mesh.NullType:
                 continue
 
             mat = shape.nodes[obj.node].matrix_world
@@ -424,10 +447,10 @@ def compute_bounds(shape, bounds_ob):
 
     # Is there a bounds mesh? Use that instead.
     if bounds_ob:
-        shape.bounds = Box(Vector(bounds_ob.bound_box[0]),
-                           Vector(bounds_ob.bound_box[6]))
+        shape.bounds = dts_utils.Box(mathutils.Vector(bounds_ob.bound_box[0]),
+                           mathutils.Vector(bounds_ob.bound_box[6]))
 
-    shape.center = Vector(((shape.bounds.min.x + shape.bounds.max.x) / 2,
+    shape.center = mathutils.Vector(((shape.bounds.min.x + shape.bounds.max.x) / 2,
                            (shape.bounds.min.y + shape.bounds.max.y) / 2,
                            (shape.bounds.min.z + shape.bounds.max.z) / 2))
 
@@ -447,11 +470,11 @@ def save(operator,
 
     scene = context.scene
     active = context.active_object
-    shape = DtsShape()
+    shape = dts_shape.Shape()
 
     blank_material_index = None
 
-    reference_frame = find_reference(scene)
+    reference_frame = util.find_reference(scene)
 
     if reference_frame is not None:
         print("Note: Seeking to reference frame at", reference_frame)
@@ -459,14 +482,14 @@ def save(operator,
 
     node_lookup = save_nodes(scene, shape, select_object, dsq_compat)
     if "fail" in node_lookup:
-        return fail(operator, node_lookup["fail"])
+        return util.fail(operator, node_lookup["fail"])
     scene_lods, scene_objects, bounds_ob = save_meshes(scene, shape,
                                                        node_lookup,
                                                        select_object)
 
     # If the shape is empty, add a detail level so it is valid
     if not shape.detail_levels:
-        dl = DetailLevel(name=shape.name('detail1'),
+        dl = dts_types.DetailLevel(name=shape.name('detail1'),
                          subshape=0,
                          objectDetail=-1,
                          size=1)
@@ -479,7 +502,7 @@ def save(operator,
         key=lambda object: object.has_transparency)  # TODO: attrgetter
 
     # Sort detail levels
-    shape.detail_levels.sort(key=attrgetter("size"), reverse=True)
+    shape.detail_levels.sort(key=operatemod.attrgetter("size"), reverse=True)
 
     for i, lod in enumerate(shape.detail_levels):
         lod.objectDetail = i  # this isn't the right place for this
@@ -509,9 +532,9 @@ def save(operator,
                 bobj, transform_mat, armature_modifier = lods[lod_name]
 
                 if armature_modifier is None:
-                    mesh_type = Mesh.StandardType
+                    mesh_type = dts_types.Mesh.StandardType
                 else:
-                    mesh_type = Mesh.SkinType
+                    mesh_type = dts_types.Mesh.SkinType
                     armature = armature_modifier.object
 
                 #########################
@@ -541,30 +564,30 @@ def save(operator,
                 # This is the danger zone
                 # Data from down here may not stay around!
 
-                dmesh = Mesh(mesh_type)
+                dmesh = dts_types.Mesh(mesh_type)
                 shape.meshes.append(dmesh)
 
                 dmesh.matrix_world = bobj.matrix_world
 
-                dmesh.bounds = dmesh.calculate_bounds_mat(Matrix())
+                dmesh.bounds = dmesh.calculate_bounds_mat(mathutils.Matrix())
                 #dmesh.center = Vector((
                 #    (dmesh.bounds.min.x + dmesh.bounds.max.x) / 2,
                 #    (dmesh.bounds.min.y + dmesh.bounds.max.y) / 2,
                 #    (dmesh.bounds.min.z + dmesh.bounds.max.z) / 2))
-                dmesh.center = Vector()
+                dmesh.center = mathutils.Vector()
                 dmesh.radius = dmesh.calculate_radius_mat(
-                    Matrix(), dmesh.center)
+                    mathutils.Matrix(), dmesh.center)
 
                 # Group all materials by their material_index
-                key = attrgetter("material_index")
-                grouped_polys = groupby(sorted(mesh.polygons, key=key),
+                key = operatemod.attrgetter("material_index")
+                grouped_polys = itertools.groupby(sorted(mesh.polygons, key=key),
                                         key=key)
                 grouped_polys = tuple(
                     map(lambda t: (t[0], tuple(t[1])), grouped_polys))
 
                 # Create a primitive from each group
                 for material_index, polys in grouped_polys:
-                    flags = Primitive.Triangles | Primitive.Indexed
+                    flags = dts_types.Primitive.Triangles | dts_types.Primitive.Indexed
 
                     if mesh.materials:
                         bmat = mesh.materials[material_index]
@@ -572,18 +595,18 @@ def save(operator,
                         if bmat not in material_table:
                             material_table[bmat] = export_material(bmat, shape)
 
-                        flags |= material_table[bmat] & Primitive.MaterialMask
+                        flags |= material_table[bmat] & dts_types.Primitive.MaterialMask
                     elif blank_material:
                         if blank_material_index is None:
                             blank_material_index = len(shape.materials)
                             shape.materials.append(
-                                Material(name="blank",
-                                         flags=Material.SWrap | Material.TWrap
-                                         | Material.NeverEnvMap))
+                                dts_types.Material(name="blank",
+                                         flags=dts_types.Material.SWrap | dts_types.Material.TWrap
+                                         | dts_types.Material.NeverEnvMap))
 
-                        flags |= blank_material_index & Primitive.MaterialMask
+                        flags |= blank_material_index & dts_types.Primitive.MaterialMask
                     else:
-                        flags |= Primitive.NoMaterial
+                        flags |= dts_types.Primitive.NoMaterial
 
                     firstElement = len(dmesh.verts)
 
@@ -616,18 +639,18 @@ def save(operator,
 
                             if uv_layer:
                                 uv = uv_layer[loop_index].uv
-                                dmesh.tverts.append(Vector((uv.x, 1 - uv.y)))
+                                dmesh.tverts.append(mathutils.Vector((uv.x, 1 - uv.y)))
                             else:
-                                dmesh.tverts.append(Vector((0, 0)))
+                                dmesh.tverts.append(mathutils.Vector((0, 0)))
 
-                            if mesh_type == Mesh.SkinType:
+                            if mesh_type == dts_types.Mesh.SkinType:
                                 add_vertex_influences(bobj, armature,
                                                       node_lookup, dmesh, vert,
                                                       vertex_index)
 
                     numElements = len(dmesh.verts) - firstElement
                     dmesh.primitives.append(
-                        Primitive(firstElement, numElements, flags))
+                        dts_types.Primitive(firstElement, numElements, flags))
 
                 bpy.data.meshes.remove(mesh)  # RIP!
 
@@ -635,7 +658,7 @@ def save(operator,
                 dmesh.vertsPerFrame = len(dmesh.verts)
 
                 if len(dmesh.indices) >= 65536:
-                    return fail(
+                    return util.fail(
                         operator,
                         "The mesh '{}' has too many vertex indices ({} >= 65536)"
                         .format(bobj.name, len(dmesh.indices)))
@@ -643,36 +666,36 @@ def save(operator,
                 ### Nobody leaves Hotel California
             else:
                 # print("Adding Null mesh for object {} in LOD {}".format(shape.names[object.name], lod_name))
-                shape.meshes.append(Mesh(Mesh.NullType))
+                shape.meshes.append(dts_types.Mesh(dts_types.Mesh.NullType))
 
     print("Creating subshape with " + str(len(shape.nodes)) + " nodes and " +
           str(len(shape.objects)) + " objects")
     shape.subshapes.append(
-        Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
+        dts_types.Subshape(0, 0, 0, len(shape.nodes), len(shape.objects), 0))
 
     # Figure out all the things
     compute_bounds(shape, bounds_ob)
 
-    sequences, sequence_flags = find_seqs(context.scene, select_marker)
+    sequences, sequence_flags = shared_export.find_seqs(context.scene, select_marker)
 
     for name, markers in sequences.items():
         print("Exporting sequence", name)
 
         if "start" not in markers:
-            return fail(operator,
+            return util.fail(operator,
                         "Missing start marker for sequence '{}'".format(name))
 
         if "end" not in markers:
-            return fail(operator,
+            return util.fail(operator,
                         "Missing end marker for sequence '{}'".format(name))
 
         frame_start = markers["start"].frame
         frame_end = markers["end"].frame
         frame_range = frame_end - frame_start + 1
 
-        seq = Sequence()
+        seq = dts_types.Sequence()
         seq.nameIndex = shape.name(name)
-        seq.flags = Sequence.AlignedScale
+        seq.flags = dts_types.Sequence.AlignedScale
         seq.priority = 1
 
         seq.toolBegin = frame_start
@@ -687,9 +710,9 @@ def save(operator,
                 if flag == "priority":
                     seq.priority = int(data)
                 elif flag == "cyclic":
-                    seq.flags |= Sequence.Cyclic
+                    seq.flags |= dts_types.Sequence.Cyclic
                 elif flag == "blend":
-                    seq.flags |= Sequence.Blend
+                    seq.flags |= dts_types.Sequence.Blend
                 elif flag == "duration":
                     seq.duration = float(data)
                 else:
@@ -745,24 +768,24 @@ def save(operator,
                 continue
 
             base_translation, base_rotation, _ = node.matrix.decompose()
-            base_scale = Vector((1.0, 1.0, 1.0))
+            base_scale = mathutils.Vector((1.0, 1.0, 1.0))
 
             fcurves = data.action.fcurves
 
-            curves_rotation = array_from_fcurves_rotation(fcurves, ob)
-            curves_translation = array_from_fcurves(fcurves, "location", 3)
-            curves_scale = array_from_fcurves(fcurves, "scale", 3)
+            curves_rotation = util.array_from_fcurves_rotation(fcurves, ob)
+            curves_translation = util.array_from_fcurves(fcurves, "location", 3)
+            curves_scale = util.array_from_fcurves(fcurves, "scale", 3)
 
             # Decide what matters by presence of f-curves
-            if curves_rotation and fcurves_keyframe_in_range(
+            if curves_rotation and util.fcurves_keyframe_in_range(
                     curves_rotation, frame_start, frame_end):
                 seq.rotationMatters[index] = True
 
-            if curves_translation and fcurves_keyframe_in_range(
+            if curves_translation and util.fcurves_keyframe_in_range(
                     curves_translation, frame_start, frame_end):
                 seq.translationMatters[index] = True
 
-            if curves_scale and fcurves_keyframe_in_range(
+            if curves_scale and util.fcurves_keyframe_in_range(
                     curves_scale, frame_start, frame_end):
                 seq.scaleMatters[index] = True
 
@@ -771,12 +794,12 @@ def save(operator,
                 translation, rotation, scale = animation_data[frame][node]
 
                 if seq.translationMatters[index]:
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         translation -= base_translation
                     shape.node_translations.append(translation)
 
                 if seq.rotationMatters[index]:
-                    if seq.flags & Sequence.Blend:
+                    if seq.flags & dts_types.Sequence.Blend:
                         rotation = base_rotation.inverted() * rotation
                     shape.node_rotations.append(rotation)
 
@@ -785,7 +808,7 @@ def save(operator,
 
     if debug_report:
         print("Writing debug report")
-        write_debug_report(filepath + ".txt", shape)
+        write_report.write_debug_report(filepath + ".txt", shape)
 
     shape.verify()
 
@@ -808,10 +831,10 @@ def write_material_textures(mode, filepath, shape, raw_colors):
         if not hasattr(material, "bl_mat"):
             continue
 
-        if f_custom and material.name.lower() in default_materials:
+        if f_custom and material.name.lower() in util.default_materials:
             continue
 
-        if f_lookup and resolve_texture(filepath, material.name) is not None:
+        if f_lookup and util.resolve_texture(filepath, material.name) is not None:
             continue
 
         bl_mat = material.bl_mat

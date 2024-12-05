@@ -437,7 +437,7 @@ def menu_func_export_dsq(self, context):
     self.layout.operator(ExportDSQ.bl_idname, text="Torque Sequences (.dsq)")
 
 
-def register():
+def register() -> None:
     bpy.utils.register_module(__name__)
 
     bpy.types.Material.torque_props = PointerProperty(
@@ -449,7 +449,7 @@ def register():
     bpy.types.INFO_MT_file_export.append(menu_func_export_dsq)
 
 
-def unregister():
+def unregister() -> None:
     bpy.utils.unregister_module(__name__)
 
     del bpy.types.Material.torque_props

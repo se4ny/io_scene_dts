@@ -33,7 +33,14 @@ for key, value in tuple(default_materials.items()):
     default_materials[key.lower()] = value
 
 
-def resolve_texture(filepath, name):
+def resolve_texture(filepath: str, name: str) -> None | str:
+    """ TODO
+    
+    :param filepath:
+    :param name:
+
+    :meta public:
+    """
     dirname = os.path.dirname(filepath)
 
     while True:
@@ -73,7 +80,14 @@ def get_rgb_colors():
     return map(lambda hsv: hsv_to_rgb(*hsv), get_hsv_colors())
 
 
-def action_get_or_new(ob):
+def action_get_or_new(ob: bpy.types.Object) -> bpy.types.Action:
+    """ TODO
+    
+    :param ob:
+    :return:
+
+    :meta public:
+    """
     if not ob.animation_data:
         ob.animation_data_create()
 
@@ -86,7 +100,16 @@ def action_get_or_new(ob):
     return action
 
 
-def ob_curves_array(ob, data_path, array_count):
+def ob_curves_array(ob: bpy.types.Object, data_path: str, array_count: int) -> list[bpy.types.FCurve]:
+    """ TODO
+    
+    :param ob:
+    :param data_path:
+    :param array_count:
+    :return:
+
+    :meta public:
+    """
     action = action_get_or_new(ob)
     curves = [None] * array_count
 
@@ -106,15 +129,36 @@ def ob_curves_array(ob, data_path, array_count):
     return curves
 
 
-def ob_location_curves(ob):
+def ob_location_curves(ob: bpy.types.Object) -> list[bpy.types.FCurve]:
+    """ TODO
+    
+    :param ob:
+    :return:
+
+    :meta public:
+    """
     return ob_curves_array(ob, "location", 3)
 
 
-def ob_scale_curves(ob):
+def ob_scale_curves(ob: bpy.types.Object) -> list[bpy.types.FCurve]:
+    """ TODO
+    
+    :param ob:
+    :return:
+
+    :meta public:
+    """
     return ob_curves_array(ob, "scale", 3)
 
 
-def fcurves_path_from_rotation(ob):
+def fcurves_path_from_rotation(ob: bpy.types.Object) -> tuple[str, int]:
+    """ TODO
+
+    :param ob:    
+    :return:
+
+    :meta public:
+    """
     if ob.rotation_mode == 'QUATERNION':
         return ('rotation_quaternion', 4)
     elif ob.rotation_mode == 'AXIS_ANGLE':
@@ -123,7 +167,14 @@ def fcurves_path_from_rotation(ob):
         return ('rotation_euler', 3)
 
 
-def ob_rotation_data(ob):
+def ob_rotation_data(ob: bpy.types.Object):
+    """ TODO
+    
+    :param ob:
+    :return:
+
+    :meta public:
+    """
     if ob.rotation_mode == 'QUATERNION':
         return ob.rotation_quaternion
     elif ob.rotation_mode == 'AXIS_ANGLE':
