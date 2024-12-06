@@ -4,9 +4,9 @@ import io
 import mathutils
 import struct
 
-import dts_utils
-import dts_stream
-import dts_types
+from . import dts_utils
+from . import dts_stream
+from . import dts_types
 
 
 class Shape(object):

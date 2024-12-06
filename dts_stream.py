@@ -7,7 +7,7 @@ import mathutils
 import struct
 import typing
 
-import dts_utils
+from . import dts_utils
 
 # Shortcut for reading & writing struct data from & to a file descriptor
 def ws(fd, spec, *values):
@@ -111,7 +111,7 @@ class OutStream(object):
 
 class InStream(object):
     """  """
-    __slots__ = ('sequence32', 'sequence16', 'sequence8', 'dtsVersion', 'exporterVersion', 'buffer32', 'buffer16', 'buffer8')
+    __slots__ = ('sequence32', 'sequence16', 'sequence8', 'dtsVersion', 'exporterVersion', 'buffer32', 'buffer16', 'buffer8', 'tell32', 'tell16' ,'tell8')
     def __init__(self, buffer: io.BufferedReader):
         self.sequence32 = ctypes.c_int(0)
         self.sequence16 = ctypes.c_short(0)
@@ -191,7 +191,7 @@ class InStream(object):
         
         :raises :py:`EOFError`:
         """
-        buf = array.array()
+        buf = bytearray()
         while True:
             byte = self.read8()
             if byte == 0:

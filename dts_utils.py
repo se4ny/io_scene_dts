@@ -6,8 +6,8 @@ import mathutils
 @dataclasses.dataclass
 class Box(object):
     """  """
-    minimum: mathutils.Vector
-    maximum: mathutils.Vector
+    min: mathutils.Vector
+    max: mathutils.Vector
 
     def __repr__(self):
-        return "({}, {})".format(self.minimum, self.maximum)
+        return "({}, {})".format(self.min, self.max)

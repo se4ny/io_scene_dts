@@ -456,17 +456,17 @@ def register() -> None:
     bpy.types.Material.torque_props = PointerProperty(
         type=TorqueMaterialProperties)
 
-    bpy.types.INFO_MT_file_import.append(menu_func_import_dts)
-    bpy.types.INFO_MT_file_import.append(menu_func_import_dsq)
-    bpy.types.INFO_MT_file_export.append(menu_func_export_dts)
-    bpy.types.INFO_MT_file_export.append(menu_func_export_dsq)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dts)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dsq)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dts)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dsq)
 
 
 def unregister() -> None:
-    bpy.types.INFO_MT_file_import.remove(menu_func_import_dts)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import_dsq)
-    bpy.types.INFO_MT_file_export.remove(menu_func_export_dts)
-    bpy.types.INFO_MT_file_export.remove(menu_func_export_dsq)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_dts)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_dsq)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dts)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dsq)
 
     for cls in classes:
         bpy.utils.unregister_class(cls)

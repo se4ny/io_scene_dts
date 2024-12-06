@@ -144,7 +144,7 @@ def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
 
 
-def export_empty_node(lookup, shape, select_object, ob, parent=-1):
+def export_empty_node(lookup, shape: dts_shape.Shape, select_object, ob, parent=-1):
     if select_object and not ob.select:
         lookup[ob] = False
         return
@@ -158,7 +158,7 @@ def export_empty_node(lookup, shape, select_object, ob, parent=-1):
 
     node.armature = None
     node.bl_ob = ob
-    node.matrix = ob.matrix_local
+    node.mat = ob.matrix_local
 
     shape.nodes.append(node)
     lookup[ob] = node

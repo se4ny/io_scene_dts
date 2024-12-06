@@ -1,4 +1,5 @@
-from .DtsTypes import *
+
+from . import dts_types
 
 
 def write_debug_report(filepath, shape):
@@ -111,7 +112,7 @@ def write_debug_report(filepath, shape):
                          "AuxiliaryMask")
             flags = ""
             for name in flagNames:
-                if mat.flags & getattr(Material, name):
+                if mat.flags & getattr(dts_types.Material, name):
                     flags += " " + name
             p("  " + str(i) + " " + mat.name + " (" + str(mat.flags) + flags +
               ")")
@@ -135,9 +136,9 @@ def write_debug_report(filepath, shape):
         p("Meshes (" + str(len(shape.meshes)) + "):")
         for i, mesh in enumerate(shape.meshes):
             mtype = mesh.get_type()
-            p("  Mesh " + str(i) + " - " + Mesh.TypeName[mtype])
+            p("  Mesh " + str(i) + " - " + dts_types.Mesh.TypeName[mtype])
 
-            if mtype == Mesh.NullType:
+            if mtype == dts_types.Mesh.NullType:
                 continue
 
             p("    flags = " + str(mesh.get_flags()))
@@ -153,19 +154,19 @@ def write_debug_report(filepath, shape):
             p("    + Primitives (" + str(len(mesh.primitives)) + "):")
             for prim in mesh.primitives:
                 flags = ""
-                if prim.type & Primitive.Triangles:
+                if prim.type & dts_types.Primitive.Triangles:
                     flags += " Triangles"
-                if prim.type & Primitive.Strip:
+                if prim.type & dts_types.Primitive.Strip:
                     flags += " Strip"
-                if prim.type & Primitive.Fan:
+                if prim.type & dts_types.Primitive.Fan:
                     flags += " Fan"
                 if flags == "":
                     flags += " NoExplicitType->Triangles"
-                if prim.type & Primitive.Indexed:
+                if prim.type & dts_types.Primitive.Indexed:
                     flags += " Indexed"
-                if prim.type & Primitive.NoMaterial:
+                if prim.type & dts_types.Primitive.NoMaterial:
                     flags += " NoMaterial"
-                mat = prim.type & Primitive.MaterialMask
+                mat = prim.type & dts_types.Primitive.MaterialMask
                 flags += " MaterialMask:" + str(mat)
                 p("      " + str(prim.firstElement) + "->" +
                   str(prim.firstElement + prim.numElements - 1) + " " +
@@ -178,7 +179,7 @@ def write_debug_report(filepath, shape):
             # for i in range(len(mesh.tverts)):
             #     p("      tvert" + str(i) + " " + str(mesh.tverts[i]))
 
-            if mtype == Mesh.SkinType:
+            if mtype == dts_types.Mesh.SkinType:
                 p("    + Bones ({})".format(len(mesh.bones)))
                 for i, (node_index,
                         initial_transform) in enumerate(mesh.bones):

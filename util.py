@@ -77,7 +77,7 @@ def get_hsv_colors():
 
 
 def get_rgb_colors():
-    return map(lambda hsv: hsv_to_rgb(*hsv), get_hsv_colors())
+    return map(lambda hsv: hsv_to_rgb(*hsv) + (1,), get_hsv_colors())
 
 
 def action_get_or_new(ob: bpy.types.Object) -> bpy.types.Action:
@@ -124,7 +124,7 @@ def ob_curves_array(ob: bpy.types.Object, data_path: str, array_count: int) -> l
 
     for index, curve in enumerate(curves):
         if curve is None:
-            curves[index] = action.fcurves.new(data_path, index)
+            curves[index] = action.fcurves.new(data_path, index=index)
 
     return curves
 

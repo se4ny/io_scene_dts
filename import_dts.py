@@ -3,12 +3,9 @@
 import itertools
 import mathutils
 import os
-import warnings
 
 import bpy
 from bpy_extras import io_utils
-from bpy_extras.io_utils import unpack_list
-
 
 from . import dts_shape
 from . import dts_types
@@ -49,7 +46,6 @@ def dedup_name(group, name):
             return new_name
 
 
-@warnings.deprecated
 def import_material(color_source, dmat: dts_types.Material, filepath: str) -> bpy.types.Material:
     """ TODO
     
@@ -136,6 +132,8 @@ def create_bmesh(dmesh: dts_types.Mesh, materials: dts_types.Material, shape: dt
     """
     me = bpy.data.meshes.new("Mesh")
 
+    # TODO: This code doesn't generate a proper mesh.
+
     faces = []
     material_indices = {}
 
@@ -149,7 +147,7 @@ def create_bmesh(dmesh: dts_types.Mesh, materials: dts_types.Material, shape: dt
 
         dmat: None | dts_types.Material = None
 
-        if not (prim.type & dts_types.Primitive.NoMaterial):
+        if False and not (prim.type & dts_types.Primitive.NoMaterial):
             dmat = shape.materials[prim.type & dts_types.Primitive.MaterialMask]
 
             if dmat not in material_indices:
@@ -185,29 +183,33 @@ def create_bmesh(dmesh: dts_types.Mesh, materials: dts_types.Material, shape: dt
                     ((indices[i], indices[i - 1], indices[i - 2]), dmat))
 
     me.vertices.add(len(dmesh.verts))
-    me.vertices.foreach_set("co", unpack_list(dmesh.verts))
-    me.vertices.foreach_set("normal", unpack_list(dmesh.normals))
+    me.vertices.foreach_set("co", io_utils.unpack_list(dmesh.verts))
+    me.vertices.foreach_set("normal", io_utils.unpack_list(dmesh.normals))
 
     me.polygons.add(len(faces))
     me.loops.add(len(faces) * 3)
 
-    me.uv_textures.new()
-    uvs = me.uv_layers[0]
+    # TODO: Crashes Blender.
+    if False:
+        me.uv_layers.new()
+        uvs = me.uv_layers[0]
 
     for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
         poly.use_smooth = True  # DTS geometry is always smooth shaded
-        poly.loop_total = 3
+        # poly.loop_total = 3
         poly.loop_start = i * 3
 
-        if dmat:
-            poly.material_index = material_indices[dmat]
+        if False:
+            if dmat:
+                poly.material_index = material_indices[dmat]
 
         for j, index in zip(poly.loop_indices, verts):
             me.loops[j].vertex_index = index
-            uv = dmesh.tverts[index]
-            uvs.data[j].uv = (uv.x, 1 - uv.y)
+            if False:
+                uv = dmesh.tverts[index]
+                uvs.data[j].uv = (uv.x, 1 - uv.y)
 
-    me.validate()
+    me.validate(verbose=True)
     me.update()
 
     return me
@@ -290,12 +292,15 @@ def load(operator: bpy.types.Operator,
     materials = {}
 
     # BUG: Blender requires alpha as well.
-    color_source = util.get_rgb_colors() + (1.0,)
+    color_source = util.get_rgb_colors()
 
-    for dmat in shape.materials:
-        materials[dmat] = import_material(color_source, dmat, filepath)
+    # TODO: Disabled for now, because material function needs to be updated.
+    if False:
+        for dmat in shape.materials:
+            materials[dmat] = import_material(color_source, dmat, filepath)
 
     # Now assign IFL material properties where needed
+    # NOTE: Included for legacy reasons.
     for ifl in shape.iflmaterials:
         mat = materials[shape.materials[ifl.slot]]
         assert mat.torque_props.use_ifl == True
@@ -358,8 +363,7 @@ def load(operator: bpy.types.Operator,
             reference_marker = context.scene.timeline_markers.get("reference")
             if reference_marker is None:
                 reference_frame = 0
-                context.scene.timeline_markers.new("reference",
-                                                   reference_frame)
+                context.scene.timeline_markers.new("reference", frame=reference_frame)
             else:
                 reference_frame = reference_marker.frame
         else:
@@ -385,7 +389,7 @@ def load(operator: bpy.types.Operator,
                     name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
                 ob.rotation_quaternion = (1, 0, 0, 0)
 
-            context.scene.objects.link(ob)
+            context.scene.collection.objects.link(ob)
             node_obs.append(ob)
             node_obs_val[node] = ob
 
@@ -559,7 +563,7 @@ def load(operator: bpy.types.Operator,
             bmesh = create_bmesh(mesh, materials, shape)
             bobj = bpy.data.objects.new(
                 dedup_name(bpy.data.objects, shape.names[obj.name]), bmesh)
-            context.scene.objects.link(bobj)
+            context.scene.collection.objects.link(bobj)
 
             add_vertex_groups(mesh, bobj, shape)
 
@@ -585,27 +589,19 @@ def load(operator: bpy.types.Operator,
     # Import a bounds mesh
     me = bpy.data.meshes.new("Mesh")
     me.vertices.add(8)
-    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y,
-                         shape.bounds.min.z)
-    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y,
-                         shape.bounds.min.z)
-    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y,
-                         shape.bounds.min.z)
-    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y,
-                         shape.bounds.min.z)
-    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y,
-                         shape.bounds.max.z)
-    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y,
-                         shape.bounds.max.z)
-    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y,
-                         shape.bounds.max.z)
-    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y,
-                         shape.bounds.max.z)
+    me.vertices[0].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.min.z)
+    me.vertices[1].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.min.z)
+    me.vertices[2].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.min.z)
+    me.vertices[3].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.min.z)
+    me.vertices[4].co = (shape.bounds.min.x, shape.bounds.min.y, shape.bounds.max.z)
+    me.vertices[5].co = (shape.bounds.max.x, shape.bounds.min.y, shape.bounds.max.z)
+    me.vertices[6].co = (shape.bounds.max.x, shape.bounds.max.y, shape.bounds.max.z)
+    me.vertices[7].co = (shape.bounds.min.x, shape.bounds.max.y, shape.bounds.max.z)
     me.validate()
     me.update()
     ob = bpy.data.objects.new("bounds", me)
-    ob.draw_type = "BOUNDS"
-    context.scene.objects.link(ob)
+    ob.display_type = 'BOUNDS'
+    context.scene.collection.objects.link(ob)
 
     return {"FINISHED"}
 

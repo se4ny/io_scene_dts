@@ -2,6 +2,7 @@
 
 import bpy
 
+from . import dts_types
 
 def import_sequence(is_dsq, shape, seq):
     if is_dsq:
@@ -12,9 +13,9 @@ def import_sequence(is_dsq, shape, seq):
     act = bpy.data.actions.new(name)
 
     flags = ["priority {}".format(seq.priority)]
-    if seq.flags & Sequence.Cyclic:
+    if seq.flags & dts_types.Sequence.Cyclic:
         flags.append("cyclic")
-    if seq.flags & Sequence.Blend:
+    if seq.flags & dts_types.Sequence.Blend:
         flags.append("blend")
     # sequences_text.append(name + ": " + ", ".join(flags))
 
@@ -25,16 +26,16 @@ def import_sequence(is_dsq, shape, seq):
         nodes = tuple(map(lambda n: shape.names[n.name], shape.nodes))
         rotations = shape.node_rotations
 
-    if seq.flags & Sequence.UniformScale:
+    if seq.flags & dts_types.Sequence.UniformScale:
         scales = tuple(map(lambda s: (s, s, s), shape.uniform_scales))
-    elif seq.flags & Sequence.AlignedScale:
+    elif seq.flags & dts_types.Sequence.AlignedScale:
         scales = shape.aligned_scales
-    elif seq.flags & Sequence.ArbitraryScale:
+    elif seq.flags & dts_types.Sequence.ArbitraryScale:
         print("Warning: Arbitrary scale animation not implemented")
-        break
+        return
     else:
         print("Warning: Invalid scale flags found in sequence")
-        break
+        return
 
     nodes_translation = tuple(
         map(lambda p: p[0],
@@ -49,7 +50,7 @@ def import_sequence(is_dsq, shape, seq):
     for matters_index, node_name in enumerate(nodes_translation):
         data_path = 'pose.bones["{}"].location'.format(node_name)
         fcus = tuple(
-            map(lambda array_index: act.fcurves.new(data_path, array_index),
+            map(lambda array_index: act.fcurves.new(data_path, index=array_index),
                 range(3)))
         for frame_index in range(seq.numKeyframes):
             array = translations[seq.baseTranslation +
@@ -64,7 +65,7 @@ def import_sequence(is_dsq, shape, seq):
     for matters_index, node_name in enumerate(nodes_rotation):
         data_path = 'pose.bones["{}"].rotation_quaternion'.format(node_name)
         fcus = tuple(
-            map(lambda array_index: act.fcurves.new(data_path, array_index),
+            map(lambda array_index: act.fcurves.new(data_path, index=array_index),
                 range(4)))
         for frame_index in range(seq.numKeyframes):
             array = rotations[seq.baseRotation +
@@ -78,7 +79,7 @@ def import_sequence(is_dsq, shape, seq):
     for matters_index, node_name in enumerate(nodes_scale):
         data_path = 'pose.bones["{}"].scale'.format(node_name)
         fcus = tuple(
-            map(lambda array_index: act.fcurves.new(data_path, array_index),
+            map(lambda array_index: act.fcurves.new(data_path, index=array_index),
                 range(3)))
         for frame_index in range(seq.numKeyframes):
             array = scales[seq.baseScale + matters_index * seq.numKeyframes +

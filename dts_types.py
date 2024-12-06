@@ -7,6 +7,8 @@ import mathutils
 import struct
 import typing
 
+import bpy
+
 
 def bit(n: int) -> int:
     return 1 << n
@@ -23,7 +25,7 @@ class Box(object):
 
 class Node(object):
     
-    __slots__ = ('name', 'parent', 'firstObject', 'firstChild', 'nextSibling')
+    __slots__ = ('name', 'parent', 'firstObject', 'firstChild', 'nextSibling', 'mat', 'bl_ob')
     def __init__(self, name: str, parent: int=-1) -> None:
         self.name: str = name
         self.parent: int = parent
@@ -32,6 +34,10 @@ class Node(object):
         self.firstObject: int = -1
         self.firstChild: int = -1
         self.nextSibling: int = -1
+        self.mat = mathutils.Matrix.Identity(4)
+
+        # NOTE:TODO: Reference a Blender object. Might want to figure out a better way to do this.
+        self.bl_ob: None | bpy.types.Object = None
 
     def write(self, stream):
         stream.write32(self.name, self.parent, self.firstObject, self.firstChild, self.nextSibling)
